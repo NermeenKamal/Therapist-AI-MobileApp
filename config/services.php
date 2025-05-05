@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+
+    'ai' => [
+        'endpoint' => env('AI_API_ENDPOINT'),
+        'token'    => env('AI_API_TOKEN'),
+    ],
+
 ];

@@ -12,11 +12,10 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            if (!Schema::hasColumn('users', 'role')) {
-                $table->enum('role', ['patient', 'doctor'])->default('patient')->after('email');
-            }
+            $table->string('report_file_path')->nullable()->after('profile_image');
         });
     }
+
 
     /**
      * Reverse the migrations.
@@ -24,9 +23,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            if (Schema::hasColumn('users', 'role')) {
-                $table->dropColumn('role');
-            }
+            //
         });
     }
 };

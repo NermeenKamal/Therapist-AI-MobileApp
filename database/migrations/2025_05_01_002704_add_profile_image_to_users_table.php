@@ -6,26 +6,20 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            if (!Schema::hasColumn('users', 'role')) {
-                $table->enum('role', ['patient', 'doctor'])->default('patient')->after('email');
+            if (!Schema::hasColumn('users', 'profile_image')) {
+                $table->string('profile_image')->nullable()->after('national_id');
             }
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            if (Schema::hasColumn('users', 'role')) {
-                $table->dropColumn('role');
+            if (Schema::hasColumn('users', 'profile_image')) {
+                $table->dropColumn('profile_image');
             }
         });
     }
