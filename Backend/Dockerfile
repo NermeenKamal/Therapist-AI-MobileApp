@@ -1,27 +1,36 @@
-# تحديد الـ PHP وApache كـ base image
-FROM php:8.0-apache
+FROM php:8.2-cli
 
-# تفعيل الـ mod_rewrite الخاص بـ Apache (مهم لـ Laravel)
-RUN a2enmod rewrite
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    unzip \
+    git \
+    curl \
+    libzip-dev \
+    zip \
+    libpng-dev \
+    libonig-dev \
+    libxml2-dev \
+    sqlite3 \
+    libsqlite3-dev
 
-# تثبيت التبعيات المطلوبة
-RUN apt-get update && apt-get install -y libpng-dev libjpeg-dev libfreetype6-dev zip git
-RUN docker-php-ext-configure gd --with-freetype --with-jpeg
-RUN docker-php-ext-install gd
-RUN docker-php-ext-install pdo pdo_mysql
+# Install PHP extensions
+RUN docker-php-ext-install pdo pdo_mysql zip
 
-# تثبيت Composer
-RUN curl -sS https://getcomposer.org/installer | php
-RUN mv composer.phar /usr/local/bin/composer
+# Install Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# نسخ كل الملفات إلى مجلد العمل داخل الـ Docker container
-COPY . /var/www/html
+# Set working directory
+WORKDIR /var/www
 
-# تحديد مجلد العمل
-WORKDIR /var/www/html
+# Copy project files
+COPY . .
 
-# تثبيت تبعيات Laravel
+# Install dependencies
 RUN composer install
 
-# تعيين الأمر الافتراضي لتشغيل Laravel
-CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=10000"]
+# Generate Laravel key (you can also do this manually later)
+# RUN php artisan key:generate
+
+# Expose port and run server
+EXPOSE 8000
+CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
