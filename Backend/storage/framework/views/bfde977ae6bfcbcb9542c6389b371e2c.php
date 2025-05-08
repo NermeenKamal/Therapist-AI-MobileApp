@@ -1,0 +1,1 @@
+<?php /**PATH C:\Users\Nermeen Kamal\OneDrive\Desktop\backend-App\resources\views/layouts/app.blade.php ENDPATH**/ ?>
