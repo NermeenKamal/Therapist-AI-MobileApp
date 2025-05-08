@@ -8,7 +8,6 @@ services:
     branch: main
     rootDir: Backend
     buildCommand: "docker build -t backend ."
-    startCommand: "docker run -p 10000:10000 backend"
     envVars:
       - key: APP_ENV
         value: production
@@ -19,4 +18,4 @@ services:
       - key: APP_URL
         value: https://therapist-ai-backend.onrender.com
       - key: DB_CONNECTION
-        value: sqlite
+        value: mysql
