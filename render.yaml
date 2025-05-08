@@ -1,14 +1,14 @@
 services:
   - type: web
     name: therapist-ai-backend
-    env: php
+    env: docker
     region: frankfurt
     plan: free
     repo: https://github.com/NermeenKamal/Therapist-AI-MobileApp
     branch: main
     rootDir: Backend
-    buildCommand: "composer install"
-    startCommand: "php artisan serve --host=0.0.0.0 --port=10000"
+    buildCommand: "docker build -t backend ."
+    startCommand: "docker run -p 10000:10000 backend"
     envVars:
       - key: APP_ENV
         value: production
@@ -20,5 +20,3 @@ services:
         value: https://therapist-ai-backend.onrender.com
       - key: DB_CONNECTION
         value: sqlite
-
-
