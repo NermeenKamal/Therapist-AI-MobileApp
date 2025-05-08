@@ -28,9 +28,8 @@ COPY . .
 # Install dependencies
 RUN composer install
 
-# Generate Laravel key (you can also do this manually later)
-# RUN php artisan key:generate
-
-# Expose port and run server
+# Expose port (optional)
 EXPOSE 8000
-CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
+
+# Run Laravel server with dynamic port support
+CMD ["sh", "-c", "php artisan serve --host=0.0.0.0 --port=${PORT:-8000}"]
