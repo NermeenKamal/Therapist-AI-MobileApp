@@ -15,6 +15,92 @@ use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ArticleController;
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+// Basic connection test
+Route::get('/db-test', function () {
+    try {
+        $connection = DB::connection()->getPdo();
+        return response()->json([
+            'success' => true,
+            'message' => 'Connected successfully to database: ' . DB::connection()->getDatabaseName(),
+            'connection' => [
+                'driver' => DB::connection()->getDriverName(),
+                'database' => DB::connection()->getDatabaseName(),
+                'host' => config('database.connections.mysql.host'),
+                'port' => config('database.connections.mysql.port')
+            ]
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Connection failed: ' . $e->getMessage()
+        ], 500);
+    }
+});
+
+// Get all tables using Laravel Schema
+Route::get('/tables', function () {
+    try {
+        $tables = Schema::getAllTables();
+        return response()->json([
+            'success' => true,
+            'tables' => $tables
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to get tables: ' . $e->getMessage()
+        ], 500);
+    }
+});
+
+// Alternative way to check for tables
+Route::get('/check-users-table', function () {
+    try {
+        $exists = Schema::hasTable('users');
+        $columns = [];
+        
+        if ($exists) {
+            $columns = Schema::getColumnListing('users');
+        }
+        
+        return response()->json([
+            'success' => true,
+            'table_exists' => $exists,
+            'columns' => $columns
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Error checking table: ' . $e->getMessage()
+        ], 500);
+    }
+});
+
+
+
+
+
+
+
+
+
+
+
 /*
 |--------------------------------------------------------------------------
 | API Routes
