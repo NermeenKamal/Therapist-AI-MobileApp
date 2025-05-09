@@ -2,105 +2,51 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ChatMessage;
+use App\Services\FCMService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Http;
-use App\Models\ChatMessage;
 
 class ChatController extends Controller
 {
-    /**
-     * Send a message from the authenticated patient to the AI chatbot.
-     *
-     * @paramRequest  $request
-     * @returnJsonResponse
-     */
+    protected FCMService $fcm;
+
+    public function __construct(FCMService $fcm)
+    {
+        $this->fcm = $fcm;
+    }
+
     public function sendMessage(Request $request): JsonResponse
     {
-        $request->validate([
+        $data = $request->validate([
+            'receiver_id' => 'required|exists:users,id',
             'message' => 'required|string',
         ]);
+        $data['sender_id'] = Auth::id();
+        $chat = ChatMessage::create($data);
 
-        $user = Auth::user();
-
-        // 1. Save patient's message
-        ChatMessage::create([
-            'user_id' => $user->id,
-            'sender'  => 'patient',
-            'message' => $request->message,
-        ]);
-
-        // 2. Send message to AI Team API
-        $response = Http::withToken(config('services.ai.token'))
-            ->post(config('services.ai.endpoint') . '/chat/process', [
-                'patient_id' => $user->id,
-                'message'    => $request->message,
-            ]);
-
-        // 3. Handle response
-        if ($response->successful() && $response->json('reply')) {
-            $botReply = $response->json('reply');
-
-            // Save bot reply
-            ChatMessage::create([
-                'user_id' => $user->id,
-                'sender'  => 'bot',
-                'message' => $botReply,
-            ]);
-
-            return response()->json([
-                'status' => 'success',
-                'reply'  => $botReply,
-            ]);
+        $receiver = $chat->receiver;
+        if ($receiver->fcm_token) {
+            $this->fcm->sendToUser(
+                $receiver->fcm_token,
+                'رسالة جديدة',
+                Auth::user()->name . ': ' . substr($chat->message, 0, 50),
+                ['chat_id' => $chat->id]
+            );
         }
 
-        return response()->json([
-            'status'  => 'error',
-            'message' => 'Failed to get response from AI.',
-        ], 502);
+        return response()->json($chat, 201);
     }
 
-    /**
-     * Receive a reply from the AI Team (webhook) and store it.
-     *
-     * @paramRequest  $request
-     * @returnJsonResponse
-     */
-    public function botReply(Request $request): JsonResponse
+    public function getMessages(Request $request, int $userId): JsonResponse
     {
-        $request->validate([
-            'patient_id' => 'required|exists:users,id',
-            'reply'      => 'required|string',
-        ]);
-
-        ChatMessage::create([
-            'user_id' => $request->patient_id,
-            'sender'  => 'bot',
-            'message' => $request->reply,
-        ]);
-
-        return response()->json([
-            'status'  => 'success',
-            'message' => 'Bot reply saved.',
-        ], 201);
-    }
-
-    /**
-     * Get full chat history between the authenticated patient and the bot.
-     *
-     * @returnJsonResponse
-     */
-    public function getMessages(): JsonResponse
-    {
-        $user = Auth::user();
-
-        $messages = ChatMessage::where('user_id', $user->id)
-            ->orderBy('created_at', 'asc')
-            ->get(['sender', 'message', 'created_at']);
-
-        return response()->json([
-            'messages' => $messages,
-        ]);
+        $authId = Auth::id();
+        $messages = ChatMessage::where(function($q) use ($authId, $userId) {
+            $q->where('sender_id', $authId)->where('receiver_id', $userId);
+        })->orWhere(function($q) use ($authId, $userId) {
+            $q->where('sender_id', $userId)->where('receiver_id', $authId);
+        })->orderBy('created_at')->get();
+        return response()->json($messages);
     }
 }

@@ -2,25 +2,58 @@
 
 namespace App\Services;
 
-use Kreait\Firebase\Messaging;
-use Kreait\Firebase\Messaging\CloudMessage;
-use Kreait\Firebase\Messaging\Notification;
-use Kreait\Firebase\Factory;
+use GuzzleHttp\Client;
+use Illuminate\Support\Facades\Log;
 
 class FCMService
 {
-    private Messaging $messaging;
+    protected Client $http;
+    protected string $serverKey;
 
-    public function __construct(Messaging $messaging)
+    public function __construct()
     {
-        $this->messaging = $messaging;
+        $this->http = new Client();
+        $this->serverKey = config('services.fcm.server_key');
     }
 
-    public final function sendNotification(string $token, string $title, string $body): void
+    public function sendToUser(string $token, string $title, string $body, array $data = []): void
     {
-        $message = CloudMessage::withTarget('token', $token)
-            ->withNotification(Notification::create($title, $body));
+        try {
+            $response = $this->http->post('https://fcm.googleapis.com/fcm/send', [
+                'headers' => [
+                    'Authorization' => 'key=' . $this->serverKey,
+                    'Content-Type'  => 'application/json',
+                ],
+                'json' => [
+                    'to'   => $token,
+                    'notification' => ['title' => $title, 'body'  => $body],
+                    'data' => $data,
+                ],
+            ]);
+            Log::info('FCM sendToUser', ['status' => $response->getStatusCode()]);
+        } catch (\Exception $e) {
+            Log::error('FCM sendToUser failed', ['error' => $e->getMessage()]);
+        }
+    }
 
-        $this->messaging->send($message);
+    public function sendBulk(array $tokens, string $title, string $body, array $data = []): void
+    {
+        if (empty($tokens)) return;
+        try {
+            $response = $this->http->post('https://fcm.googleapis.com/fcm/send', [
+                'headers' => [
+                    'Authorization' => 'key=' . $this->serverKey,
+                    'Content-Type'  => 'application/json',
+                ],
+                'json' => [
+                    'registration_ids' => $tokens,
+                    'notification' => ['title' => $title, 'body'  => $body],
+                    'data' => $data,
+                ],
+            ]);
+            Log::info('FCM sendBulk', ['status' => $response->getStatusCode()]);
+        } catch (\Exception $e) {
+            Log::error('FCM sendBulk failed', ['error' => $e->getMessage()]);
+        }
     }
 }

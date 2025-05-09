@@ -2,156 +2,86 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Models\Appointment;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Http\JsonResponse;
+use App\Models\User;
 use App\Services\FCMService;
-use App\Models\Doctor;
+use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
 
 class AppointmentController extends Controller
 {
-    public final function store(Request $request): JsonResponse
+    protected FCMService $fcm;
+
+    public function __construct(FCMService $fcm)
     {
-        $request->validate([
+        $this->fcm = $fcm;
+    }
+
+    public function index(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $appointments = Appointment::where(function($q) use ($user) {
+            $q->where('patient_id', $user->id)
+              ->orWhere('doctor_id', $user->id);
+        })->with(['doctor', 'patient'])->get();
+        return response()->json($appointments);
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        $data = $request->validate([
             'doctor_id' => 'required|exists:users,id',
-            'date' => 'required|date',
-            'time' => 'required|string',
+            'date_time' => 'required|date',
         ]);
+        $data['patient_id'] = Auth::id();
+        $appointment = Appointment::create($data);
 
-        $appointment = Appointment::create([
-            'patient_id' => Auth::id(),
-            'doctor_id' => $request->doctor_id,
-            'date' => $request->date,
-            'time' => $request->time,
-        ]);
-
-        // إشعار للطبيب بحجز جديد
         $doctor = $appointment->doctor;
-        if ($doctor && $doctor->device_token) {
-            app(FCMService::class)->sendNotification(
-                $doctor->device_token,
-                'حجز جديد',
-                "لديك حجز جديد من المريض {$appointment->patient->name} يوم {$appointment->date} الساعة {$appointment->time}"
+        if ($doctor->fcm_token) {
+            $this->fcm->sendToUser(
+                $doctor->fcm_token,
+                'موعد جديد',
+                "لديك موعد جديد مع " . Auth::user()->name,
+                ['appointment_id' => $appointment->id]
             );
         }
 
-        return response()->json([
-            'appointment' => $appointment,
-        ], 201);
+        return response()->json($appointment, 201);
     }
 
-    public final function index(): JsonResponse
+    public function cancel(Request $request, int $id): JsonResponse
     {
-        $appointments = Appointment::with(['patient', 'doctor'])->get();
-
-        return response()->json([
-            'appointments' => $appointments,
-        ]);
-    }
-
-    public function confirmAppointment($appointmentId): JsonResponse
-    {
-        $appointment = Appointment::with(['patient', 'doctor'])->findOrFail($appointmentId);
-        $patient = $appointment->patient;
-
-        $appointment->status = 'confirmed';
+        $appointment = Appointment::findOrFail($id);
+        $this->authorize('cancel', $appointment);
+        $appointment->status = 'canceled';
+        $appointment->canceled_by = Auth::id();
         $appointment->save();
 
-        // إشعار للمريض بأن الدكتور أكد الحجز
-        if ($patient && $patient->device_token) {
-            app(FCMService::class)->sendNotification(
-                $patient->device_token,
-                'تم تأكيد الحجز',
-                "الدكتور {$appointment->doctor->name} أكد موعدك في {$appointment->date} الساعة {$appointment->time}"
+        $other = ($appointment->patient_id === Auth::id()) ? $appointment->doctor : $appointment->patient;
+        if ($other->fcm_token) {
+            $this->fcm->sendToUser(
+                $other->fcm_token,
+                'تم إلغاء موعد',
+                'تم إلغاء موعدك رقم ' . $appointment->id,
+                ['appointment_id' => $appointment->id]
             );
         }
 
-        return response()->json(['message' => 'Appointment confirmed and notification sent.']);
+        return response()->json($appointment);
     }
 
-    public function cancelAppointment($appointmentId)
+    public function specializations(): JsonResponse
     {
-        $appointment = Appointment::findOrFail($appointmentId);
-
-        // تحقق إن المستخدم الحالي هو أحد أطراف الموعد
-        if (Auth::id() !== $appointment->patient_id && Auth::id() !== $appointment->doctor_id) {
-            return response()->json(['message' => 'Unauthorized'], 403);
-        }
-
-        // تحديد من قام بالإلغاء
-        $canceller = Auth::user();
-        $recipient = Auth::id() === $appointment->patient_id ? $appointment->doctor : $appointment->patient;
-
-        // تحديث حالة الموعد
-        $appointment->status = 'cancelled';
-        $appointment->canceled_by = Auth::id(); // لازم يكون عندك العمود ده في جدول appointments
-        $appointment->save();
-
-        // إرسال إشعار للطرف الآخر
-        if ($recipient && $recipient->device_token) {
-            app(FCMService::class)->sendNotification(
-                $recipient->device_token,
-                'تم إلغاء الموعد',
-                "{$canceller->name} ألغى الموعد بتاريخ {$appointment->date} الساعة {$appointment->time}"
-            );
-        }
-
-        return response()->json(['message' => 'Appointment cancelled and notification sent.']);
+        $specs = User::where('role', 'doctor')->distinct()->pluck('specialization');
+        return response()->json($specs);
     }
 
-    public function myAppointments()
+    public function doctorsBySpecialization(string $specialization): JsonResponse
     {
-        $user = Auth::user();
-        $appointments = [];
-
-        if ($user->is_doctor) {
-            $appointments = Appointment::where('doctor_id', $user->id)->with('patient')->get();
-        } else {
-            $appointments = Appointment::where('patient_id', $user->id)->with('doctor')->get();
-        }
-
-        return response()->json(['appointments' => $appointments]);
+        $doctors = User::where('role', 'doctor')
+                        ->where('specialization', $specialization)
+                        ->get();
+        return response()->json($doctors);
     }
-
-
-
-    public function getSpecializations()
-    {
-        $specializations = ['Cardiology', 'Dermatology', 'Neurology', 'Pediatrics', 'Psychiatry'];
-        return response()->json(['specializations' => $specializations]);
-    }
-
-    public function getDoctorsBySpecialization($specialization)
-    {
-        $allowedSpecializations = ['Cardiology', 'Dermatology', 'Neurology', 'Pediatrics', 'Psychiatry'];
-
-        if (!in_array($specialization, $allowedSpecializations)) {
-            return response()->json(['message' => 'Invalid specialization'], 400);
-        }
-
-        $doctors = Doctor::where('specialization', $specialization)
-            ->where('is_verified', true) // optional: only verified doctors
-            ->with(['availableAppointments', 'bertRating']) // assuming relationships
-            ->get()
-            ->map(function ($doctor) {
-                return [
-                    'id' => $doctor->id,
-                    'name' => $doctor->user->name,
-                    'specialization' => $doctor->specialization,
-                    'bert_rating' => $doctor->bert_rating ?? 'Not rated yet',
-                    'appointments' => $doctor->availableAppointments->map(function ($app) {
-                        return [
-                            'id' => $app->id,
-                            'date' => $app->date,
-                            'time' => $app->time,
-                        ];
-                    })
-                ];
-            });
-
-        return response()->json(['doctors' => $doctors]);
-    }
-
-
 }
