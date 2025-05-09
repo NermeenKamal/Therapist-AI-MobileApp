@@ -42,21 +42,18 @@ return [
             'synchronous' => null,
         ],
 
-        'mysql' => [
+       'mysql' => [
     'driver' => 'mysql',
-    'host' => env('DB_HOST', 'yamanote.proxy.rlwy.net'),
-    'port' => env('DB_PORT', '41769'),
-    'database' => env('DB_DATABASE', 'railway'),
-    'username' => env('DB_USERNAME', 'root'),
-    'password' => env('DB_PASSWORD', 'rBnjLvNQFchQHxkBFxAKCZBHCkYzNYVv'),
+    'host' => env('DB_HOST'),
+    'port' => env('DB_PORT'),
+    'database' => env('DB_DATABASE'),
+    'username' => env('DB_USERNAME'),
+    'password' => env('DB_PASSWORD'),
     'charset' => 'utf8mb4',
     'collation' => 'utf8mb4_unicode_ci',
-    'prefix' => '',
-    'strict' => true,
-    'engine' => null,
     'options' => [
-        PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA', '/etc/ssl/cert.pem'), // Railway's default CA
-        PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false, // Disable certificate validation
+        PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+        PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false,
     ],
 ],
 
