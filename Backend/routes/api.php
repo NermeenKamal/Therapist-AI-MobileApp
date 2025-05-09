@@ -14,7 +14,23 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ArticleController;
 
+use App\Http\Controllers\DoctorOCRController;
+use App\Http\Controllers\ChatSentimentController;
+use App\Http\Controllers\OcrVerificationController;
+use App\Http\Controllers\SentimentAnalysisController;
+use App\Http\Controllers\ReportGenerationController;
 
+Route::post('/generate-report', [ReportGenerationController::class, 'generateReport']);
+
+Route::post('/analyze-chat', [SentimentAnalysisController::class, 'analyzeChat']);
+
+Route::post('/verify-doctor-id', [OcrVerificationController::class, 'verifyDoctorId']);
+
+Route::post('/generate-report', [ReportController::class, 'generate']);
+
+Route::post('/analyze-chat', [ChatSentimentController::class, 'analyze']);
+
+Route::post('/doctor/verify-id', [DoctorOCRController::class, 'verify']);
 
 
 
@@ -73,11 +89,11 @@ Route::get('/check-users-table', function () {
     try {
         $exists = Schema::hasTable('users');
         $columns = [];
-        
+
         if ($exists) {
             $columns = Schema::getColumnListing('users');
         }
-        
+
         return response()->json([
             'success' => true,
             'table_exists' => $exists,
@@ -90,6 +106,9 @@ Route::get('/check-users-table', function () {
         ], 500);
     }
 });
+
+
+
 
 
 
@@ -134,6 +153,9 @@ Route::post('/chat/reply', [ChatController::class, 'botReply']);
 // ---------------------- Protected Routes ---------------------- //
 
 Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/report/{id}/download', [ReportController::class, 'download']);
+    Route::get('/patient/{id}/reports', [ReportController::class, 'getPatientReports']);
+
     // patient and doctor messages
     Route::post('/chat/send', [ChatController::class, 'sendMessage']);
     Route::get('/chat/history', [ChatController::class, 'getMessages']);
