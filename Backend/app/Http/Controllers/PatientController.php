@@ -6,45 +6,118 @@ use Illuminate\Http\Request;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 
+
+
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 class PatientController extends Controller
 {
     /**
      * Register a new patient.
      *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\JsonResponse
+     * @param\Illuminate\Http\Request  $request
+     * @return\Illuminate\Http\JsonResponse
      */
-    public function registerPatient(Request $request): \Illuminate\Http\JsonResponse
+
+
+// use App\Models\Patient; // Uncomment if you have a separate Patient model
+    public function registerPatient(Request $request)
     {
-        $request->validate([
-            'name'      => 'required|string|max:255',
-            'email'     => 'required|email|unique:users,email',
-            'password'  => 'required|string|min:6',
-            'phone'     => 'required|string|max:20',
-        ]);
+        \Log::info('Patient registration attempt started', ['data' => $request->except('password')]);
 
-        $user = User::create([
-            'name'     => $request->name,
-            'email'    => $request->email,
-            'password' => Hash::make($request->password),
-            'phone'    => $request->phone,
-            'role'     => 'patient',
-        ]);
+        try {
+            // First validate the input
+            $validator = Validator::make($request->all(), [
+                'name' => 'required|string|max:255',
+                'email' => 'required|string|email|max:255|unique:users',
+                'password' => 'required|string|min:8',
+            ]);
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+            if ($validator->fails()) {
+                \Log::warning('Validation failed', ['errors' => $validator->errors()]);
+                return response()->json(['errors' => $validator->errors()], 422);
+            }
 
-        return response()->json([
-            'message' => 'Patient registered successfully',
-            'user'    => $user,
-            'token'   => $token
-        ], 201);
+            // Start transaction
+            DB::beginTransaction();
+
+            try {
+                // Create user with role = patient
+                $userData = [
+                    'name' => $request->name,
+                    'email' => $request->email,
+                    'password' => Hash::make($request->password),
+                    'role' => 'patient',
+                    'phone_number' => $request->phone_number ?? null,
+                    'address' => $request->address ?? null,
+                ];
+
+                \Log::info('Attempting to create user with data', array_diff_key($userData, ['password' => '']));
+
+                $user = new User($userData);
+                $saved = $user->save();
+
+                \Log::info('User save result', ['saved' => $saved, 'user_id' => $user->id ?? 'null']);
+
+                // If you're using a separate patients table
+                if (class_exists('App\\Models\\Patient')) {
+                    $patient = new Patient([
+                        'user_id' => $user->id,
+                        // Add patient-specific fields
+                    ]);
+                    $patientSaved = $patient->save();
+                    \Log::info('Patient save result', ['saved' => $patientSaved, 'patient_id' => $patient->id ?? 'null']);
+                }
+
+                // Commit transaction
+                DB::commit();
+
+                // Double-check the user was saved by retrieving it again
+                $savedUser = User::find($user->id);
+                \Log::info('Verification query', ['user_exists' => !is_null($savedUser)]);
+
+                if (!$savedUser) {
+                    \Log::error('User not found after save', ['user_id' => $user->id]);
+                    return response()->json(['error' => 'Failed to register patient: User record not found after save'], 500);
+                }
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Patient registered successfully',
+                    'user_id' => $user->id
+                ]);
+            } catch (\Exception $e) {
+                // Something went wrong, rollback
+                DB::rollBack();
+                \Log::error('Exception during registration', [
+                    'message' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Registration failed: ' . $e->getMessage()
+                ], 500);
+            }
+        } catch (\Exception $e) {
+            \Log::error('Unhandled exception', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'An unexpected error occurred'
+            ], 500);
+        }
     }
 
     /**
      * Patient login function.
      *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\JsonResponse
+     * @param\Illuminate\Http\Request  $request
+     * @return\Illuminate\Http\JsonResponse
      */
     public function loginPatient(Request $request): \Illuminate\Http\JsonResponse
     {

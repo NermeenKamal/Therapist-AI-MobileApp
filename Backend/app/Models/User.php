@@ -29,6 +29,9 @@ class User extends Authenticatable
         'profile_image',
         'phone_number',
         'role',
+        'national_id_extracted',
+        'is_verified_by_ocr',
+        'ocr_debug_text',
     ];
 
 
