@@ -120,12 +120,6 @@ Laravel_Backend --> PDF_Storage
 
 ---
 
-## 📸 Screenshots
-
-> (اختياري – تقدر تحط هنا صور توضح الـ PDF، الـ Chat، أو ردود الـ API)
-
----
-
 ## 📜 License
 
 This project is part of a university graduation requirement. For academic use only.
@@ -134,6 +128,9 @@ This project is part of a university graduation requirement. For academic use on
 
 ## 👨‍💻 Developed By
 
-- **[Your Name]** – Backend Developer  
-- [GitHub](https://github.com/your-username)  
-- [LinkedIn](https://linkedin.com/in/your-profile)
+- Nermeen – Backend Developer
+- Abdelrhman - Kotlin Developer
+- Menna - AI Developer
+- AbdAllah - Kotlin Developer
+- Alaa - AI Developer
+  
