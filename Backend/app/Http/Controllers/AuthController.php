@@ -35,7 +35,7 @@ class AuthController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users',
             'password' => 'required|string|min:8|confirmed',
-            'specialization' => 'required|string',
+            'specialization' => 'required|in:Behavioral,Mindfulness & Acceptance,Talk Supportive,Relationship & Family,Solution Focused & Goal Oriented',
             'national_id' => 'required|string|size:14|unique:users',
         ]);
         $data['password'] = Hash::make($data['password']);
