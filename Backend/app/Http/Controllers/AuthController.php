@@ -8,7 +8,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
 
-
 class AuthController extends Controller
 {
 
@@ -52,25 +51,13 @@ class AuthController extends Controller
             'email' => 'required|email',
             'password' => 'required|string',
         ]);
-
         if (!Auth::attempt($credentials)) {
             return response()->json(['message' => 'Invalid credentials'], 401);
         }
-
         $user = Auth::user();
-
-        if ($user->role === 'doctor' && !$user->is_verified_by_ocr) {
-            return response()->json([
-                'status' => 'pending_verification',
-                'message' => 'Doctor account not yet verified. Please wait for admin approval.'
-            ], 403);
-        }
-
         $token = $user->createToken('api-token')->plainTextToken;
-
         return response()->json(compact('user', 'token'));
     }
-
 
     public function logout(Request $request): JsonResponse
     {
