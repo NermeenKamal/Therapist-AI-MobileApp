@@ -10,6 +10,10 @@ use App\Http\Controllers\OcrVerificationController;
 use App\Http\Controllers\SentimentAnalysisController;
 use App\Http\Controllers\ReportGenerationController;
 
+// reset password routes
+Route::post('/forgot-password', [ForgotPasswordController::class, 'sendResetLink']);
+Route::post('/reset-password', [ForgotPasswordController::class, 'reset']);
+
 // Public Auth
 Route::post('auth/register-patient', [AuthController::class, 'registerPatient']);
 Route::post('auth/register-doctor', [AuthController::class, 'registerDoctor']);
