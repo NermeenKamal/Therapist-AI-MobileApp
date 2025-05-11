@@ -8,8 +8,10 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
 
+
 class AuthController extends Controller
 {
+
     public function registerPatient(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -17,10 +19,14 @@ class AuthController extends Controller
             'email' => 'required|email|unique:users',
             'password' => 'required|string|min:8|confirmed',
         ]);
+
         $data['password'] = Hash::make($data['password']);
         $data['role'] = 'patient';
+        $data['national_id'] = null; // <-- Explicitly set to null
+
         $user = User::create($data);
         $token = $user->createToken('api-token')->plainTextToken;
+
         return response()->json(compact('user', 'token'), 201);
     }
 
@@ -46,13 +52,25 @@ class AuthController extends Controller
             'email' => 'required|email',
             'password' => 'required|string',
         ]);
+
         if (!Auth::attempt($credentials)) {
             return response()->json(['message' => 'Invalid credentials'], 401);
         }
+
         $user = Auth::user();
+
+        if ($user->role === 'doctor' && !$user->is_verified_by_ocr) {
+            return response()->json([
+                'status' => 'pending_verification',
+                'message' => 'Doctor account not yet verified. Please wait for admin approval.'
+            ], 403);
+        }
+
         $token = $user->createToken('api-token')->plainTextToken;
+
         return response()->json(compact('user', 'token'));
     }
+
 
     public function logout(Request $request): JsonResponse
     {
