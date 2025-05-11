@@ -9,6 +9,7 @@ use App\Http\Controllers\BroadcastNotificationController;
 use App\Http\Controllers\OcrVerificationController;
 use App\Http\Controllers\SentimentAnalysisController;
 use App\Http\Controllers\ReportGenerationController;
+use App\Http\Controllers\ForgotPasswordController;
 
 // reset password routes
 Route::post('/forgot-password', [ForgotPasswordController::class, 'sendResetLink']);
