@@ -14,7 +14,7 @@ return [
     |
     */
 
-  'default' => env('MAIL_MAILER', 'mailtrap'),
+    'default' => env('MAIL_MAILER', 'log'),
 
     /*
     |--------------------------------------------------------------------------
@@ -93,13 +93,6 @@ return [
                 'ses',
                 'postmark',
             ],
-        ],
-      'mailtrap' => [
-            'transport' => 'mailtrap',
-            'client' => [
-                'api_key' => env('MAILTRAP_API_KEY'),
-            ],
-            'inbox_id' => env('MAILTRAP_INBOX_ID'),
         ],
 
     ],
