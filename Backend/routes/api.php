@@ -13,7 +13,7 @@ use App\Http\Controllers\ForgotPasswordController;
 
 // reset password routes
 Route::post('/forgot-password', [ForgotPasswordController::class, 'sendResetLink']);
-Route::post('/reset-password', [ForgotPasswordController::class, 'reset']);
+Route::post('/reset-password', [ForgotPasswordController::class, 'reset'])->name('password.reset');
 
 // Public Auth
 Route::post('auth/register-patient', [AuthController::class, 'registerPatient']);
