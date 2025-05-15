@@ -2,36 +2,39 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Models\User;
 use App\Services\FCMService;
+use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 
 class BroadcastNotificationController extends Controller
 {
-    public function sendToAll(Request $request)
+    protected FCMService $fcm;
+
+    public function __construct(FCMService $fcm)
     {
-        $request->validate([
+        $this->fcm = $fcm;
+    }
+
+    public function broadcast(Request $request): JsonResponse
+    {
+        $data = $request->validate([
             'title' => 'required|string',
-            'body' => 'required|string',
-            'role' => 'nullable|string',
+            'body'  => 'required|string',
         ]);
 
-        $query = User::query();
+        $tokens = [];
+        User::chunk(100, function ($users) use ($data, &$tokens) {
+            foreach ($users as $user) {
+                $user->notifications()->create(['title' => $data['title'], 'body' => $data['body']]);
+                if ($user->fcm_token) {
+                    $tokens[] = $user->fcm_token;
+                }
+            }
+        });
 
-        if ($request->has('role')) {
-            $query->where('role', $request->role);
-        }
+        $this->fcm->sendBulk($tokens, $data['title'], $data['body']);
 
-        $users = $query->whereNotNull('device_token')->get();
-
-        foreach ($users as $user) {
-            app(FCMService::class)->sendNotification(
-                $user->device_token,
-                $request->title,
-                $request->body
-            );
-        }
-
-        return response()->json(['message' => 'Broadcast notification sent to all.']);
+        return response()->json(['message' => 'Broadcast sent'], 200);
     }
 }

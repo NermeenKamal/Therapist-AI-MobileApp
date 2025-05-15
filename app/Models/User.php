@@ -2,56 +2,59 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Auth\Passwords\CanResetPassword as CanResetPasswordTrait;
 
 use Laravel\Sanctum\HasApiTokens;
 
-class Doctor extends Authenticatable
-{
-    use HasApiTokens;
-}
-
-
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable, HasApiTokens;
+    use HasApiTokens, Notifiable;
+    use CanResetPasswordTrait;
+
 
     protected $fillable = [
         'name',
         'email',
         'password',
-        'national_id',
-        'specialization',
-        'id_card_path',
-        'profile_image',
-        'phone_number',
         'role',
+        'fcm_token',
+        'is_verified_by_ocr',
     ];
-
 
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
-    protected final function casts(): array
+    protected $casts = [
+        'email_verified_at' => 'datetime',
+        'is_verified_by_ocr' => 'boolean',
+    ];
+
+    public function notifications()
     {
-        return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-        ];
+        return $this->hasMany(Notification::class);
     }
 
-    public final function appointmentsAsPatient(): HasMany
+    public function doctor()
     {
-        return $this->hasMany(Appointment::class, 'patient_id');
+        return $this->hasOne(Doctor::class);
     }
 
-    public final function appointmentsAsDoctor(): HasMany
+    public function patient()
     {
-        return $this->hasMany(Appointment::class, 'doctor_id');
+        return $this->hasOne(Patient::class);
+    }
+
+    public function isDoctor()
+    {
+        return $this->role === 'doctor';
+    }
+
+    public function isPatient()
+    {
+        return $this->role === 'patient';
     }
 }

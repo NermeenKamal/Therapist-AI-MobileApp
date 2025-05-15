@@ -2,41 +2,40 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\FCMService;
 use Illuminate\Http\Request;
-use App\Models\Notification;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\JsonResponse;
 
 class NotificationController extends Controller
 {
-    /**
-     * Get all notifications for the authenticated user.
-     */
-    public function index(): JsonResponse
-    {
-        $notifications = Notification::where('user_id', Auth::id())
-            ->orderBy('created_at', 'desc')
-            ->get();
+    protected FCMService $fcm;
 
-        return response()->json([
-            'notifications' => $notifications
-        ]);
+    public function __construct(FCMService $fcm)
+    {
+        $this->fcm = $fcm;
     }
 
-    /**
-     * Mark a specific notification as read.
-     */
-    public function markAsRead($id): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $notification = Notification::where('user_id', Auth::id())
-            ->where('id', $id)
-            ->firstOrFail();
+        $notifications = $request->user()->notifications()->orderBy('created_at', 'desc')->get();
+        return response()->json($notifications);
+    }
 
-        $notification->update(['is_read' => true]);
+    public function markRead(Request $request, int $id): JsonResponse
+    {
+        $notif = $request->user()->notifications()->findOrFail($id);
+        $notif->is_read = true;
+        $notif->save();
 
-        return response()->json([
-            'message' => 'Notification marked as read.',
-            'notification' => $notification
-        ]);
+        if ($request->user()->fcm_token) {
+            $this->fcm->sendToUser(
+                $request->user()->fcm_token,
+                'Notification Read',
+                'تم قراءة الإشعار بنجاح',
+                ['notification_id' => $notif->id]
+            );
+        }
+
+        return response()->json($notif);
     }
 }
