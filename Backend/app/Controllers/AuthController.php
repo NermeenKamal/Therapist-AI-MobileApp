@@ -47,7 +47,7 @@ class AuthController extends Controller
 
             // Create token with try-catch
             try {
-                $token = $patient->createToken('auth_token')->plainTextToken;
+        $token = $patient->createToken('auth_token')->plainTextToken;
             } catch (\Exception $e) {
                 \Log::error('Token creation failed:', [
                     'error' => $e->getMessage(),
@@ -56,11 +56,11 @@ class AuthController extends Controller
                 $token = null;
             }
 
-            return response()->json([
-                'message' => 'Patient registered successfully',
-                'patient' => $patient,
+        return response()->json([
+            'message' => 'Patient registered successfully',
+            'patient' => $patient,
                 'token' => $token ?? 'Token creation failed, please login to get a new token'
-            ], 201);
+        ], 201);
         } catch (\Exception $e) {
             \Log::error('Patient registration failed:', [
                 'error' => $e->getMessage(),
@@ -126,19 +126,19 @@ class AuthController extends Controller
             }
 
             $data = $request->except('national_id_file');
-            $data['password'] = Hash::make($request->password);
+        $data['password'] = Hash::make($request->password);
             $data['national_id_path'] = $nationalIdPath ?? null;
             $data['is_verified_by_ocr'] = $isVerifiedByOcr ?? false;
-            
-            $doctor = Doctor::create($data);
-            $token = $doctor->createToken('auth_token')->plainTextToken;
+        
+        $doctor = Doctor::create($data);
+        $token = $doctor->createToken('auth_token')->plainTextToken;
 
-            return response()->json([
+        return response()->json([
                 'message' => 'Doctor registered successfully' . ($isVerifiedByOcr ? ' and verified by OCR' : ' but pending OCR verification'),
-                'doctor' => $doctor,
+            'doctor' => $doctor,
                 'token' => $token,
                 'ocr_verified' => $isVerifiedByOcr ?? false
-            ], 201);
+        ], 201);
 
         } catch (\Exception $e) {
             \Log::error('Doctor registration failed:', [
@@ -216,5 +216,14 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Logged out successfully'
         ]);
+    }
+
+    public function saveFcmToken(Request $request)
+    {
+        $request->validate(['fcm_token' => 'required|string']);
+        $user = $request->user();
+        $user->fcm_token = $request->fcm_token;
+        $user->save();
+        return response()->json(['message' => 'تم حفظ التوكن بنجاح']);
     }
 }
