@@ -7,14 +7,19 @@ use App\Services\FCMService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
+use App\Services\BertSentimentService;
+use App\Models\ChatRating;
+use App\Models\User;
 
 class ChatController extends Controller
 {
     protected FCMService $fcm;
+    protected BertSentimentService $bert;
 
-    public function __construct(FCMService $fcm)
+    public function __construct(FCMService $fcm, BertSentimentService $bert)
     {
         $this->fcm = $fcm;
+        $this->bert = $bert;
     }
 
     public function sendMessage(Request $request): JsonResponse
@@ -26,8 +31,22 @@ class ChatController extends Controller
         $data['sender_id'] = Auth::id();
         $chat = ChatMessage::create($data);
 
+        // BERT sentiment analysis if sender is doctor
+        $sender = User::find(Auth::id());
+        $rating = null;
+        if ($sender && $sender->role === 'doctor') {
+            $bertResult = $this->bert->analyze($data['message']);
+            $rating = ChatRating::create([
+                'doctor_id' => $sender->id,
+                'patient_id' => $data['receiver_id'],
+                'chat_text' => $data['message'],
+                'sentiment_score' => $bertResult['score'],
+                'sentiment_label' => $bertResult['label'],
+            ]);
+        }
+
         $receiver = $chat->receiver;
-        if ($receiver->fcm_token) {
+        if ($receiver && $receiver->fcm_token) {
             $this->fcm->sendToUser(
                 $receiver->fcm_token,
                 'رسالة جديدة',
@@ -36,7 +55,13 @@ class ChatController extends Controller
             );
         }
 
-        return response()->json($chat, 201);
+        $response = $chat->toArray();
+        if ($rating) {
+            $response['sentiment_score'] = $rating->sentiment_score;
+            $response['sentiment_label'] = $rating->sentiment_label;
+        }
+
+        return response()->json($response, 201);
     }
 
     public function getMessages(Request $request, int $userId): JsonResponse
