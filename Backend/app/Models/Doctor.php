@@ -19,6 +19,7 @@ class Doctor extends Authenticatable
         'password',
         'mobile_number',
         'national_id',
+        'national_id_path',
         'specialization',
         'bio',
         'session_price',
