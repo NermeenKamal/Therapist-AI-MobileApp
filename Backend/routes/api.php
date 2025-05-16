@@ -10,6 +10,7 @@ use App\Controllers\OcrVerificationController;
 use App\Controllers\SentimentAnalysisController;
 use App\Controllers\ReportGenerationController;
 use App\Controllers\ForgotPasswordController;
+use App\Controllers\AIChatbotController;
 
 // reset password routes
 Route::post('/forgot-password', [ForgotPasswordController::class, 'sendResetLink']);
@@ -42,6 +43,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('verify-doctor-id', [OcrVerificationController::class, 'verify']);
     Route::post('analyze-chat', [SentimentAnalysisController::class, 'analyze']);
     Route::post('generate-report', [ReportGenerationController::class, 'generate']);
+
+    // AI Chatbot
+    Route::post('chat/bot/message', [AIChatbotController::class, 'sendMessage']);
+    Route::get('chat/bot/response/{conversationId}', [AIChatbotController::class, 'getResponse']);
 });
 
 
