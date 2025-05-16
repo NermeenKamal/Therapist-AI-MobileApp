@@ -31,23 +31,33 @@ class AppointmentController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'doctor_id' => 'required|exists:users,id',
-            'date_time' => 'required|date',
+            'doctor_id' => 'required|exists:doctors,id',
+            'doctor_schedule_id' => 'required|exists:doctor_schedules,id',
         ]);
         $data['patient_id'] = Auth::id();
+
+        // تحقق أن الـ slot غير محجوز
+        $alreadyBooked = Appointment::where('doctor_id', $data['doctor_id'])
+            ->where('doctor_schedule_id', $data['doctor_schedule_id'])
+            ->whereIn('status', ['pending', 'confirmed'])
+            ->exists();
+        if ($alreadyBooked) {
+            return response()->json(['message' => 'this appointment is already taken'], 422);
+        }
+
         $appointment = Appointment::create($data);
 
         $doctor = $appointment->doctor;
-        if ($doctor->fcm_token) {
+        if ($doctor && $doctor->fcm_token) {
             $this->fcm->sendToUser(
                 $doctor->fcm_token,
-                'موعد جديد',
-                "لديك موعد جديد مع " . Auth::user()->name,
+                'new appointment',
+                "new appointment number:  " . Auth::user()->name,
                 ['appointment_id' => $appointment->id]
             );
         }
 
-        return response()->json($appointment, 201);
+        return response()->json($appointment->load('doctorSchedule'), 201);
     }
 
     public function cancel(Request $request, int $id): JsonResponse
@@ -62,8 +72,8 @@ class AppointmentController extends Controller
         if ($other->fcm_token) {
             $this->fcm->sendToUser(
                 $other->fcm_token,
-                'تم إلغاء موعد',
-                'تم إلغاء موعدك رقم ' . $appointment->id,
+                'appointment canceled',
+                'appointment canceled number:  ' . $appointment->id,
                 ['appointment_id' => $appointment->id]
             );
         }
@@ -90,20 +100,31 @@ class AppointmentController extends Controller
         $appointment = Appointment::findOrFail($id);
         $this->authorize('update', $appointment);
         $data = $request->validate([
-            'date_time' => 'required|date',
+            'doctor_schedule_id' => 'required|exists:doctor_schedules,id',
         ]);
-        $appointment->update(['date_time' => $data['date_time']]);
+
+        // تحقق أن الـ slot غير محجوز (عدا هذا الموعد)
+        $alreadyBooked = Appointment::where('doctor_id', $appointment->doctor_id)
+            ->where('doctor_schedule_id', $data['doctor_schedule_id'])
+            ->whereIn('status', ['pending', 'confirmed'])
+            ->where('id', '!=', $appointment->id)
+            ->exists();
+        if ($alreadyBooked) {
+            return response()->json(['message' => 'this appointment is already taken'], 422);
+        }
+
+        $appointment->update(['doctor_schedule_id' => $data['doctor_schedule_id']]);
 
         $other = ($appointment->patient_id === Auth::id()) ? $appointment->doctor : $appointment->patient;
         if ($other && $other->fcm_token) {
             $this->fcm->sendToUser(
                 $other->fcm_token,
-                'تعديل موعد',
-                'تم تعديل موعدك رقم ' . $appointment->id,
+                'appointment edit',
+                'appointment edited number: ' . $appointment->id,
                 ['appointment_id' => $appointment->id]
             );
         }
 
-        return response()->json($appointment);
+        return response()->json($appointment->load('doctorSchedule'));
     }
 }
