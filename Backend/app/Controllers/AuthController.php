@@ -86,9 +86,10 @@ class AuthController extends Controller
             'password' => 'required|string|min:8|confirmed',
             'mobile_number' => 'required|string|unique:doctors',
             'national_id' => 'required|string|unique:doctors',
+            'national_id_file' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120', // 5MB max
             'specialization' => 'required|string',
             'bio' => 'string|nullable',
-            'session_price' => 'required|numeric|min:0',
+            'session_price' => 'numeric|min:0|nullable',
             'medical_license_path' => 'string|nullable',
             'profile_image' => 'string|nullable',
             'fcm_token' => 'string|nullable'
@@ -98,17 +99,58 @@ class AuthController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $data = $request->all();
-        $data['password'] = Hash::make($request->password);
-        
-        $doctor = Doctor::create($data);
-        $token = $doctor->createToken('auth_token')->plainTextToken;
+        try {
+            // Handle national ID file upload
+            if ($request->hasFile('national_id_file')) {
+                $file = $request->file('national_id_file');
+                $nationalIdPath = $file->store('national_ids', 'public');
+                
+                // Initialize OCR verification as false
+                $isVerifiedByOcr = false;
+                
+                // Perform OCR verification if the file is an image
+                if (in_array($file->getClientOriginalExtension(), ['jpg', 'jpeg', 'png'])) {
+                    try {
+                        $tesseract = new \thiagoalessio\TesseractOCR\TesseractOCR(storage_path('app/public/' . $nationalIdPath));
+                        $ocrText = $tesseract->run();
+                        
+                        // Check if the provided national ID exists in the OCR text
+                        $isVerifiedByOcr = str_contains($ocrText, $request->national_id);
+                    } catch (\Exception $e) {
+                        \Log::error('OCR verification failed:', [
+                            'error' => $e->getMessage(),
+                            'file' => $nationalIdPath
+                        ]);
+                    }
+                }
+            }
 
-        return response()->json([
-            'message' => 'Doctor registered successfully',
-            'doctor' => $doctor,
-            'token' => $token
-        ], 201);
+            $data = $request->except('national_id_file');
+            $data['password'] = Hash::make($request->password);
+            $data['national_id_path'] = $nationalIdPath ?? null;
+            $data['is_verified_by_ocr'] = $isVerifiedByOcr ?? false;
+            
+            $doctor = Doctor::create($data);
+            $token = $doctor->createToken('auth_token')->plainTextToken;
+
+            return response()->json([
+                'message' => 'Doctor registered successfully' . ($isVerifiedByOcr ? ' and verified by OCR' : ' but pending OCR verification'),
+                'doctor' => $doctor,
+                'token' => $token,
+                'ocr_verified' => $isVerifiedByOcr ?? false
+            ], 201);
+
+        } catch (\Exception $e) {
+            \Log::error('Doctor registration failed:', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'message' => 'Registration failed',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     public function loginPatient(Request $request): JsonResponse
