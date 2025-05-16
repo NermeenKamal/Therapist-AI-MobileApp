@@ -11,6 +11,7 @@ use App\Controllers\SentimentAnalysisController;
 use App\Controllers\ReportGenerationController;
 use App\Controllers\ForgotPasswordController;
 use App\Controllers\AIChatbotController;
+use App\Controllers\DoctorScheduleController;
 
 // reset password routes
 Route::post('/forgot-password', [ForgotPasswordController::class, 'sendResetLink']);
@@ -47,6 +48,12 @@ Route::middleware('auth:sanctum')->group(function () {
     // AI Chatbot
     Route::post('chat/bot/message', [AIChatbotController::class, 'sendMessage']);
     Route::get('chat/bot/response/{conversationId}', [AIChatbotController::class, 'getResponse']);
+
+    // Doctor Schedule
+    Route::get('/doctor/schedule', [DoctorScheduleController::class, 'index']);
+    Route::post('/doctor/schedule', [DoctorScheduleController::class, 'store']);
+    Route::put('/doctor/schedule/{id}', [DoctorScheduleController::class, 'update']);
+    Route::delete('/doctor/schedule/{id}', [DoctorScheduleController::class, 'destroy']);
 });
 
 
