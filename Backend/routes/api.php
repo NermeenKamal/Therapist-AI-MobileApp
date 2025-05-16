@@ -1,15 +1,15 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\AuthController;
-use App\Http\Controllers\AppointmentController;
-use App\Http\Controllers\ChatController;
-use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\BroadcastNotificationController;
-use App\Http\Controllers\OcrVerificationController;
-use App\Http\Controllers\SentimentAnalysisController;
-use App\Http\Controllers\ReportGenerationController;
-use App\Http\Controllers\ForgotPasswordController;
+use App\Controllers\AuthController;
+use App\Controllers\AppointmentController;
+use App\Controllers\ChatController;
+use App\Controllers\NotificationController;
+use App\Controllers\BroadcastNotificationController;
+use App\Controllers\OcrVerificationController;
+use App\Controllers\SentimentAnalysisController;
+use App\Controllers\ReportGenerationController;
+use App\Controllers\ForgotPasswordController;
 
 // reset password routes
 Route::post('/forgot-password', [ForgotPasswordController::class, 'sendResetLink']);
