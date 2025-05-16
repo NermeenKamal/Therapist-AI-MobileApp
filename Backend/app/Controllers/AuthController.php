@@ -14,6 +14,9 @@ class AuthController extends Controller
 {
     public function registerPatient(Request $request): JsonResponse
     {
+        // Debug the incoming request data
+        \Log::info('Patient registration request data:', $request->all());
+
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:patients',
@@ -34,20 +37,26 @@ class AuthController extends Controller
         }
 
         try {
-            $patient = Patient::create([
-                'name' => $request->name,
-                'email' => $request->email,
-                'password' => Hash::make($request->password),
-                'mobile_number' => $request->mobile_number,
-                'national_id' => $request->national_id,
-                'date_of_birth' => $request->date_of_birth,
-                'gender' => $request->gender,
-                'medical_history' => $request->medical_history,
-                'current_medications' => $request->current_medications,
-                'allergies' => $request->allergies,
-                'emergency_contact_name' => $request->emergency_contact_name,
-                'emergency_contact_number' => $request->emergency_contact_number
-            ]);
+            // Create the data array first for debugging
+            $patientData = [
+                'name' => $request->input('name'),
+                'email' => $request->input('email'),
+                'password' => Hash::make($request->input('password')),
+                'mobile_number' => $request->input('mobile_number'),
+                'national_id' => $request->input('national_id')
+            ];
+
+            // Log the data we're about to insert
+            \Log::info('Attempting to create patient with data:', $patientData);
+
+            // Try creating with the minimum required fields first
+            $patient = new Patient();
+            $patient->name = $request->input('name');
+            $patient->email = $request->input('email');
+            $patient->password = Hash::make($request->input('password'));
+            $patient->mobile_number = $request->input('mobile_number');
+            $patient->national_id = $request->input('national_id');
+            $patient->save();
 
             $token = $patient->createToken('auth_token')->plainTextToken;
 
@@ -57,9 +66,18 @@ class AuthController extends Controller
                 'token' => $token
             ], 201);
         } catch (\Exception $e) {
+            \Log::error('Patient registration failed:', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
             return response()->json([
                 'message' => 'Registration failed',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'debug_info' => [
+                    'request_data' => $request->all(),
+                    'validation_passed' => true
+                ]
             ], 500);
         }
     }
