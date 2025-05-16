@@ -33,17 +33,35 @@ class AuthController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $data = $request->all();
-        $data['password'] = Hash::make($request->password);
+        try {
+            $patient = Patient::create([
+                'name' => $request->name,
+                'email' => $request->email,
+                'password' => Hash::make($request->password),
+                'mobile_number' => $request->mobile_number,
+                'national_id' => $request->national_id,
+                'date_of_birth' => $request->date_of_birth,
+                'gender' => $request->gender,
+                'medical_history' => $request->medical_history,
+                'current_medications' => $request->current_medications,
+                'allergies' => $request->allergies,
+                'emergency_contact_name' => $request->emergency_contact_name,
+                'emergency_contact_number' => $request->emergency_contact_number
+            ]);
 
-        $patient = Patient::create($data);
-        $token = $patient->createToken('auth_token')->plainTextToken;
+            $token = $patient->createToken('auth_token')->plainTextToken;
 
-        return response()->json([
-            'message' => 'Patient registered successfully',
-            'patient' => $patient,
-            'token' => $token
-        ], 201);
+            return response()->json([
+                'message' => 'Patient registered successfully',
+                'patient' => $patient,
+                'token' => $token
+            ], 201);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Registration failed',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     public function registerDoctor(Request $request): JsonResponse
