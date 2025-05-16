@@ -84,4 +84,26 @@ class AppointmentController extends Controller
                         ->get();
         return response()->json($doctors);
     }
+
+    public function update(Request $request, int $id): JsonResponse
+    {
+        $appointment = Appointment::findOrFail($id);
+        $this->authorize('update', $appointment);
+        $data = $request->validate([
+            'date_time' => 'required|date',
+        ]);
+        $appointment->update(['date_time' => $data['date_time']]);
+
+        $other = ($appointment->patient_id === Auth::id()) ? $appointment->doctor : $appointment->patient;
+        if ($other && $other->fcm_token) {
+            $this->fcm->sendToUser(
+                $other->fcm_token,
+                'تعديل موعد',
+                'تم تعديل موعدك رقم ' . $appointment->id,
+                ['appointment_id' => $appointment->id]
+            );
+        }
+
+        return response()->json($appointment);
+    }
 }
