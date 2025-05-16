@@ -64,6 +64,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/doctors', [DoctorController::class, 'index']);
     // تفاصيل دكتور واحد
     Route::get('/doctors/{id}', [DoctorController::class, 'show']);
+
+    Route::post('/save-fcm-token', [AuthController::class, 'saveFcmToken']);
 });
 
 
