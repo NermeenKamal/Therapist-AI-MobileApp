@@ -24,13 +24,13 @@ class ImportArticlesJob implements ShouldQueue
     {
         $rssFeed = simplexml_load_file('https://news.google.com/rss/search?q=mental+health');
         foreach ($rssFeed->channel->item as $item) {
-            Article::updateOrCreate(
+            \App\Models\Article::updateOrCreate(
                 ['title' => (string) $item->title],
                 [
-                    'description' => (string) $item->description,
-                    'publisher_name' => 'المصدر الرسمي',
+                    'description' => strip_tags((string) $item->description),
+                    'publisher_name' => isset($item->source) ? (string) $item->source : 'Google News',
                     'published_at' => new \DateTime((string) $item->pubDate),
-                    'article_image' => (string) $item->enclosure['url'] ?? null,
+                    'article_image' => null,
                 ]
             );
         }
