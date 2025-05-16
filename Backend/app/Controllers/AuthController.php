@@ -200,6 +200,12 @@ class AuthController extends Controller
             ], 401);
         }
 
+        if (!$doctor->is_verified_by_ocr) {
+            return response()->json([
+                'message' => 'Your National ID has not been verified yet. Please wait for verification before logging in.'
+            ], 403);
+        }
+
         $token = $doctor->createToken('auth_token')->plainTextToken;
 
         return response()->json([
@@ -216,14 +222,5 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Logged out successfully'
         ]);
-    }
-
-    public function saveFcmToken(Request $request)
-    {
-        $request->validate(['fcm_token' => 'required|string']);
-        $user = $request->user();
-        $user->fcm_token = $request->fcm_token;
-        $user->save();
-        return response()->json(['message' => 'تم حفظ التوكن بنجاح']);
     }
 }
