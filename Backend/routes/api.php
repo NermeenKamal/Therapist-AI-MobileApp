@@ -12,6 +12,7 @@ use App\Controllers\ReportGenerationController;
 use App\Controllers\ForgotPasswordController;
 use App\Controllers\AIChatbotController;
 use App\Controllers\DoctorScheduleController;
+use App\Controllers\DoctorController;
 
 // reset password routes
 Route::post('/forgot-password', [ForgotPasswordController::class, 'sendResetLink']);
@@ -54,6 +55,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/doctor/schedule', [DoctorScheduleController::class, 'store']);
     Route::put('/doctor/schedule/{id}', [DoctorScheduleController::class, 'update']);
     Route::delete('/doctor/schedule/{id}', [DoctorScheduleController::class, 'destroy']);
+
+    // Doctor
+    Route::post('/doctor/update-profile', [DoctorController::class, 'updateProfile']);
 });
 
 
