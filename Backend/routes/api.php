@@ -31,6 +31,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('appointments/{id}/cancel', [AppointmentController::class, 'cancel']);
     Route::get('specializations', [AppointmentController::class, 'specializations']);
     Route::get('doctors/{specialization}', [AppointmentController::class, 'doctorsBySpecialization']);
+    Route::put('/appointments/{id}', [AppointmentController::class, 'update']);
 
     // Chat
     Route::post('chat/send', [ChatController::class, 'sendMessage']);
