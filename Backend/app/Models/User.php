@@ -18,18 +18,15 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
-        'role',
-        'national_id',
-        'is_verified_by_ocr',
-        'ocr_debug_text',
-        'sentiment_score',
         'fcm_token',
-        'phone_number',
-        'address'
+        'is_verified_by_ocr',
+    ];
+
+    protected $hidden = [
+        'password',
     ];
 
     protected $casts = [
-        'email_verified_at' => 'datetime',
         'is_verified_by_ocr' => 'boolean',
     ];
 
@@ -38,13 +35,33 @@ class User extends Authenticatable
         return $this->hasMany(Notification::class);
     }
 
-    public function appointmentsAsPatient()
+    public function doctor()
     {
-        return $this->hasMany(Appointment::class, 'patient_id');
+        return $this->hasOne(Doctor::class);
     }
 
-    public function appointmentsAsDoctor()
+    public function patient()
     {
-        return $this->hasMany(Appointment::class, 'doctor_id');
+        return $this->hasOne(Patient::class);
+    }
+
+    public function isDoctor()
+    {
+        return $this->role === 'doctor';
+    }
+
+    public function isPatient()
+    {
+        return $this->role === 'patient';
+    }
+
+    public function appointments()
+    {
+        return $this->hasMany(Appointment::class);
+    }
+
+    public function reports()
+    {
+        return $this->hasMany(PatientReport::class);
     }
 }
