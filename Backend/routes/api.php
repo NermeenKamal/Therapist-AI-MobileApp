@@ -58,6 +58,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Doctor
     Route::post('/doctor/update-profile', [DoctorController::class, 'updateProfile']);
+
+    // عرض كل الدكاترة مع فلترة التخصص
+    Route::get('/doctors', [DoctorController::class, 'index']);
+    // تفاصيل دكتور واحد
+    Route::get('/doctors/{id}', [DoctorController::class, 'show']);
 });
 
 
