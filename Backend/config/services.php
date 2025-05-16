@@ -10,6 +10,7 @@ return [
 
     'ai' => [
         'chatbot_endpoint' => env('AI_CHATBOT_ENDPOINT', 'http://localhost:5000/chat'),
+        'bert_endpoint' => env('BERT_SENTIMENT_ENDPOINT', 'http://localhost:5000/bert-sentiment'),
     ],
 
 ];
