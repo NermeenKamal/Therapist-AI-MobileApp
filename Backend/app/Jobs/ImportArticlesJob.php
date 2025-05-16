@@ -22,7 +22,7 @@ class ImportArticlesJob implements ShouldQueue
      */
     public function handle()
     {
-        $rssFeed = simplexml_load_file('https://example.com/rss'); // غيّري الرابط للمصدر الحقيقي
+        $rssFeed = simplexml_load_file('https://news.google.com/rss/search?q=mental+health');
         foreach ($rssFeed->channel->item as $item) {
             Article::updateOrCreate(
                 ['title' => (string) $item->title],
