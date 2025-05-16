@@ -37,19 +37,6 @@ class AuthController extends Controller
         }
 
         try {
-            // Create the data array first for debugging
-            $patientData = [
-                'name' => $request->input('name'),
-                'email' => $request->input('email'),
-                'password' => Hash::make($request->input('password')),
-                'mobile_number' => $request->input('mobile_number'),
-                'national_id' => $request->input('national_id')
-            ];
-
-            // Log the data we're about to insert
-            \Log::info('Attempting to create patient with data:', $patientData);
-
-            // Try creating with the minimum required fields first
             $patient = new Patient();
             $patient->name = $request->input('name');
             $patient->email = $request->input('email');
@@ -58,12 +45,21 @@ class AuthController extends Controller
             $patient->national_id = $request->input('national_id');
             $patient->save();
 
-            $token = $patient->createToken('auth_token')->plainTextToken;
+            // Create token with try-catch
+            try {
+                $token = $patient->createToken('auth_token')->plainTextToken;
+            } catch (\Exception $e) {
+                \Log::error('Token creation failed:', [
+                    'error' => $e->getMessage(),
+                    'patient_id' => $patient->id
+                ]);
+                $token = null;
+            }
 
             return response()->json([
                 'message' => 'Patient registered successfully',
                 'patient' => $patient,
-                'token' => $token
+                'token' => $token ?? 'Token creation failed, please login to get a new token'
             ], 201);
         } catch (\Exception $e) {
             \Log::error('Patient registration failed:', [
