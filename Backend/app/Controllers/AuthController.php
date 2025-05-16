@@ -54,13 +54,12 @@ class AuthController extends Controller
             'password' => 'required|string|min:8|confirmed',
             'mobile_number' => 'required|string|unique:doctors',
             'national_id' => 'required|string|unique:doctors',
-            'specialization' => 'required|in:Behavioral,Mindfulness & Acceptance,Talk Supportive,Relationship & Family,Solution Focused & Goal Oriented',
-            'license_number' => 'required|string|unique:doctors',
-            'years_of_experience' => 'required|integer|min:0',
-            'education' => 'required|string',
+            'specialization' => 'required|string',
             'bio' => 'string|nullable',
-            'working_hours' => 'string|nullable',
-            'consultation_fee' => 'numeric|nullable'
+            'session_price' => 'required|numeric|min:0',
+            'medical_license_path' => 'string|nullable',
+            'profile_image' => 'string|nullable',
+            'fcm_token' => 'string|nullable'
         ]);
 
         if ($validator->fails()) {
