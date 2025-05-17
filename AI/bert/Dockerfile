@@ -14,6 +14,7 @@ COPY requirements.txt .
 COPY app.py .
 
 # تثبيت متطلبات Python
+RUN pip install --no-cache-dir torch==2.1.1+cpu -f https://download.pytorch.org/whl/torch_stable.html
 RUN pip install --no-cache-dir -r requirements.txt
 
 # تعريض المنفذ
