@@ -32,7 +32,7 @@ try:
     print("==== Model loaded! ====")
     print("==== Memory usage (MB):", psutil.virtual_memory().used / 1024 / 1024)
 except Exception as e:
-    print(f"==== FATAL ERROR: {e} ====")
+    print("Error loading model:", e)
     raise
 
 class ChatInput(BaseModel):
@@ -90,5 +90,5 @@ async def chat(input_data: ChatInput):
 if __name__ == "__main__":
     import uvicorn
     print("==== Starting Uvicorn server... ====")
-    port = int(os.getenv("PORT", 8000))
+    port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port) 
