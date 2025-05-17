@@ -26,28 +26,44 @@ class ForgotPasswordController extends Controller
             return response()->json(['message' => 'Email not found.'], 404);
         }
 
-        // إنشاء كود تحقق من 6 أرقام
-        $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-        
-        // حفظ الكود في قاعدة البيانات
-        DB::table('password_resets')->updateOrInsert(
-            ['email' => $request->email],
-            [
-                'token' => Hash::make($code),
-                'created_at' => Carbon::now()
-            ]
-        );
-
-        // إرسال البريد
         try {
-            Mail::raw("Your password reset code is: " . $code . "\nThis code will expire in 1 hour.", function($message) use ($request) {
-                $message->to($request->email)
-                        ->subject('Password Reset Code');
-            });
+            // إنشاء كود تحقق من 6 أرقام
+            $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+            
+            // حفظ الكود في قاعدة البيانات
+            DB::table('password_resets')->updateOrInsert(
+                ['email' => $request->email],
+                [
+                    'token' => Hash::make($code),
+                    'created_at' => Carbon::now()
+                ]
+            );
 
-            return response()->json(['message' => 'Reset code sent to your email.']);
+            // إرسال البريد مع الكود
+            Mail::raw(
+                "Your password reset verification code is: " . $code . "\n\n" .
+                "This code will expire in 1 hour.\n" .
+                "If you did not request a password reset, please ignore this email.",
+                function($message) use ($request) {
+                    $message->to($request->email)
+                            ->subject('Password Reset Verification Code');
+                }
+            );
+
+            // إرجاع رسالة نجاح بدون إظهار الكود
+            return response()->json([
+                'message' => 'Reset code has been sent to your email.',
+                'status' => 'success'
+            ]);
+
         } catch (\Exception $e) {
-            return response()->json(['message' => 'Could not send reset code.', 'error' => $e->getMessage()], 500);
+            // في حالة حدوث خطأ، نحذف أي كود تم إنشاؤه
+            DB::table('password_resets')->where('email', $request->email)->delete();
+            
+            return response()->json([
+                'message' => 'Could not send reset code.',
+                'error' => 'An error occurred while sending the email.'
+            ], 500);
         }
     }
 
@@ -88,9 +104,12 @@ class ForgotPasswordController extends Controller
             return response()->json(['message' => 'Email not found.'], 404);
         }
 
-        // حذف الكود
+        // حذف الكود بعد الاستخدام
         DB::table('password_resets')->where('email', $request->email)->delete();
 
-        return response()->json(['message' => 'Password has been reset successfully.']);
+        return response()->json([
+            'message' => 'Password has been reset successfully.',
+            'status' => 'success'
+        ]);
     }
 }
