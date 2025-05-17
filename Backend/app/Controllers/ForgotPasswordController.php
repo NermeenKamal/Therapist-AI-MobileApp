@@ -11,25 +11,32 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
+use Exception;
 
 class ForgotPasswordController extends Controller
 {
     public function sendResetCode(Request $request)
     {
-        $request->validate(['email' => 'required|email']);
-
-        // البحث عن المستخدم في كلا الجدولين
-        $patient = Patient::where('email', $request->email)->first();
-        $doctor = Doctor::where('email', $request->email)->first();
-        
-        if (!$patient && !$doctor) {
-            return response()->json(['message' => 'Email not found.'], 404);
-        }
-
         try {
+            $request->validate(['email' => 'required|email']);
+
+            Log::info('Password reset requested for email: ' . $request->email);
+
+            // البحث عن المستخدم في كلا الجدولين
+            $patient = Patient::where('email', $request->email)->first();
+            $doctor = Doctor::where('email', $request->email)->first();
+            
+            if (!$patient && !$doctor) {
+                Log::info('Email not found in database: ' . $request->email);
+                return response()->json(['message' => 'Email not found.'], 404);
+            }
+
             // إنشاء كود تحقق من 6 أرقام
             $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
             
+            Log::info('Generated reset code for email: ' . $request->email);
+
             // حفظ الكود في قاعدة البيانات
             DB::table('password_resets')->updateOrInsert(
                 ['email' => $request->email],
@@ -39,30 +46,53 @@ class ForgotPasswordController extends Controller
                 ]
             );
 
-            // إرسال البريد مع الكود
-            Mail::raw(
-                "Your password reset verification code is: " . $code . "\n\n" .
-                "This code will expire in 1 hour.\n" .
-                "If you did not request a password reset, please ignore this email.",
-                function($message) use ($request) {
-                    $message->to($request->email)
-                            ->subject('Password Reset Verification Code');
-                }
-            );
+            Log::info('Reset code saved to database for email: ' . $request->email);
 
-            // إرجاع رسالة نجاح بدون إظهار الكود
+            // إرسال البريد مع الكود
+            $emailSent = false;
+            try {
+                Mail::raw(
+                    "Your password reset verification code is: " . $code . "\n\n" .
+                    "This code will expire in 1 hour.\n" .
+                    "If you did not request a password reset, please ignore this email.",
+                    function($message) use ($request) {
+                        $message->to($request->email)
+                                ->subject('Password Reset Verification Code');
+                    }
+                );
+                $emailSent = true;
+                Log::info('Reset code email sent successfully to: ' . $request->email);
+            } catch (Exception $mailException) {
+                Log::error('Failed to send reset code email', [
+                    'email' => $request->email,
+                    'error' => $mailException->getMessage(),
+                    'trace' => $mailException->getTraceAsString()
+                ]);
+                
+                // حذف الكود إذا فشل إرسال البريد
+                DB::table('password_resets')->where('email', $request->email)->delete();
+                
+                throw $mailException;
+            }
+
+            // إرجاع رسالة نجاح
             return response()->json([
                 'message' => 'Reset code has been sent to your email.',
-                'status' => 'success'
+                'status' => 'success',
+                'email_sent' => $emailSent
             ]);
 
-        } catch (\Exception $e) {
-            // في حالة حدوث خطأ، نحذف أي كود تم إنشاؤه
-            DB::table('password_resets')->where('email', $request->email)->delete();
+        } catch (Exception $e) {
+            Log::error('Password reset process failed', [
+                'email' => $request->email ?? 'not provided',
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             
             return response()->json([
-                'message' => 'Could not send reset code.',
-                'error' => 'An error occurred while sending the email.'
+                'message' => 'Could not process password reset request.',
+                'error' => 'An error occurred while processing your request.',
+                'details' => config('app.debug') ? $e->getMessage() : null
             ], 500);
         }
     }
