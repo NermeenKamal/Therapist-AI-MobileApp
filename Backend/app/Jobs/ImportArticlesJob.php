@@ -3,46 +3,51 @@
 namespace App\Jobs;
 
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Foundation\Queue\Queueable;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Http;
+use App\Models\Article;
+use Spatie\Browsershot\Browsershot;
 
 class ImportArticlesJob implements ShouldQueue
 {
-    use Queueable;
+    use Dispatchable, InteractsWithQueue, SerializesModels;
 
     private const DEFAULT_IMAGE = 'https://th.bing.com/th/id/OIP.a0NRZ33m0j4afFvhw-nvSQHaGC?cb=iwc2&rs=1&pid=ImgDetMain';
 
-    /**
-     * Create a new job instance.
-     */
     public function __construct()
     {
         //
     }
 
-    /**
-     * Execute the job.
-     */
     public function handle()
     {
-        Log::info('ImportArticlesJob started from Psychology Today');
+        Log::info('ImportArticlesJob started...');
 
-        $this->ensureStorageDirectories();
+        // استخدام Browsershot
+        try {
+            $html = Browsershot::url('https://www.psychologytoday.com/us/essentials')
+                ->userAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0 Safari/537.36')
+                ->timeout(30)
+                ->bodyHtml();
+        } catch (\Exception $e) {
+            Log::error('Failed to fetch page with Browsershot', ['error' => $e->getMessage()]);
+            return;
+        }
 
-        $newArticles = [];
-        $html = file_get_contents('https://www.psychologytoday.com/us/essentials');
         $dom = new \DOMDocument();
         @$dom->loadHTML($html);
         $xpath = new \DOMXPath($dom);
 
+        $newArticles = [];
+
         foreach ($xpath->query('//article') as $node) {
             $titleNode = $xpath->query('.//h2', $node)->item(0);
-            $title = $titleNode ? trim($titleNode->textContent) : '';
+            $title = $titleNode ? trim($titleNode->textContent) : null;
 
             $linkNode = $xpath->query('.//a', $node)->item(0);
-            $url = $linkNode ? 'https://www.psychologytoday.com' . $linkNode->getAttribute('href') : '';
+            $url = $linkNode ? 'https://www.psychologytoday.com' . $linkNode->getAttribute('href') : null;
 
             $imgNode = $xpath->query('.//img', $node)->item(0);
             $image = $imgNode ? $imgNode->getAttribute('src') : self::DEFAULT_IMAGE;
@@ -67,52 +72,21 @@ class ImportArticlesJob implements ShouldQueue
             }
         }
 
-        dd($newArticles);
-
-        // 2. إذا نجح جلب عدد كافٍ من المقالات (مثلاً >= 10)
         if (count($newArticles) > 0) {
-            \App\Models\Article::truncate();
-            foreach ($newArticles as $data) {
-                \App\Models\Article::create($data);
+            Article::truncate();
+            foreach ($newArticles as $article) {
+                Article::create($article);
             }
-            \Log::info('Articles imported successfully', ['count' => count($newArticles)]);
+            Log::info('Articles imported successfully', ['count' => count($newArticles)]);
         } else {
-            \Log::error('No articles were imported');
+            Log::warning('No articles were parsed or available.');
         }
 
-        $total = \App\Models\Article::count();
+        $total = Article::count();
         if ($total > 100) {
             $toDelete = $total - 100;
-            \App\Models\Article::orderBy('created_at')->limit($toDelete)->delete();
-            \Log::info('Deleted old articles', ['count' => $toDelete]);
-        }
-    }
-
-    /**
-     * التأكد من وجود المجلدات المطلوبة
-     */
-    private function ensureStorageDirectories()
-    {
-        // التأكد من وجود مجلد storage/app/public
-        if (!Storage::disk('public')->exists('')) {
-            Storage::disk('public')->makeDirectory('');
-        }
-
-        // التأكد من وجود مجلد articles
-        if (!Storage::disk('public')->exists('articles')) {
-            Storage::disk('public')->makeDirectory('articles');
-        }
-
-        // التأكد من وجود الرابط الرمزي
-        if (!file_exists(public_path('storage'))) {
-            try {
-                \Illuminate\Support\Facades\Artisan::call('storage:link');
-                Log::info('Storage link created successfully');
-            } catch (\Exception $e) {
-                Log::error('Failed to create storage link', [
-                    'error' => $e->getMessage()
-                ]);
-            }
+            Article::orderBy('created_at')->limit($toDelete)->delete();
+            Log::info('Old articles deleted', ['count' => $toDelete]);
         }
     }
 }
