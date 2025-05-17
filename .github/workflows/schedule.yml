@@ -19,6 +19,8 @@ jobs:
 
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
+        working-directory: Backend
 
       - name: Run import articles
         run: php artisan import:articles
+        working-directory: Backend
