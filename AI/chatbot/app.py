@@ -20,13 +20,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+print("==== Chatbot API IS STARTING ====")
+
 # تحميل النموذج والتوكينايزر
 try:
+    print("==== Loading model... ====")
     tokenizer = AutoTokenizer.from_pretrained("microsoft/DialoGPT-medium")
     model = AutoModelForCausalLM.from_pretrained("microsoft/DialoGPT-medium")
     model.eval()
+    print("==== Model loaded! ====")
 except Exception as e:
-    print(f"Error loading model: {e}")
+    print(f"==== ERROR WHILE LOADING MODEL: {e} ====")
     raise
 
 class ChatInput(BaseModel):
@@ -78,9 +82,11 @@ async def chat(input_data: ChatInput):
             "chat_history": chat_history + [user_message, response]
         }
     except Exception as e:
+        print(f"==== ERROR IN /chat: {e} ====")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
+    print("==== Starting Uvicorn server... ====")
     port = int(os.getenv("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port) 
