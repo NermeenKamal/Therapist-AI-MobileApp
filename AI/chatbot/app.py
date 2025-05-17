@@ -5,6 +5,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 import os
 from dotenv import load_dotenv
+import psutil
 
 # تحميل المتغيرات البيئية
 load_dotenv()
@@ -29,6 +30,7 @@ try:
     model = AutoModelForCausalLM.from_pretrained("microsoft/DialoGPT-small")
     model.eval()
     print("==== Model loaded! ====")
+    print("==== Memory usage (MB):", psutil.virtual_memory().used / 1024 / 1024)
 except Exception as e:
     print(f"==== ERROR WHILE LOADING MODEL: {e} ====")
     raise
