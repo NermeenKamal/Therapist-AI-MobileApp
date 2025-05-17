@@ -1,8 +1,8 @@
-name: Daily Import Articles
+name: Weekly Import Articles
 
 on:
   schedule:
-    - cron: '0 2 * * *' # كل يوم الساعة 2 صباحاً بتوقيت UTC
+    - cron: '0 2 * * 1' # كل يوم اثنين الساعة 2 صباحاً بتوقيت UTC
   workflow_dispatch:
 
 jobs:
