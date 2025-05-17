@@ -10,12 +10,14 @@ use Illuminate\Support\Facades\Log;
 use App\Models\Article;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
+use SimpleXMLElement;
 
 class ImportArticlesJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, SerializesModels;
 
-    private const DEFAULT_IMAGE = 'https://th.bing.com/th/id/OIP.a0NRZ33m0j4afFvhw-nvSQHaGC?cb=iwc2&rs=1&pid=ImgDetMain';
+    private const DEFAULT_IMAGE = 'https://www.nimh.nih.gov/sites/default/files/images/nimh-logo.png';
+    private const RSS_FEED_URL = 'https://www.nimh.nih.gov/site-info/index-rss.atom';
 
     public function __construct()
     {
@@ -37,169 +39,91 @@ class ImportArticlesJob implements ShouldQueue
             ]);
             
             Log::info('Test article created successfully', ['id' => $testArticle->id]);
+            
+            // حذف المقالة الاختبارية بعد التأكد من نجاح الاتصال
+            $testArticle->delete();
+            Log::info('Test article deleted');
         } catch (\Exception $e) {
             Log::error('Failed to create test article', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
+            return;
         }
         
-        // استخدام Guzzle بدلاً من Browsershot
+        // استخدام Guzzle لجلب محتوى RSS feed
         try {
             $client = new Client();
-            $response = $client->get('https://www.psychologytoday.com/us/essentials', [
+            $response = $client->get(self::RSS_FEED_URL, [
                 'headers' => [
                     'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0 Safari/537.36',
                 ],
                 'timeout' => 30,
             ]);
-            $html = $response->getBody()->getContents();
-            Log::info('Successfully fetched page with Guzzle', ['content_length' => strlen($html)]);
-            
-            // طباعة عينة من HTML المستخرج
-            Log::info('HTML content sample', ['sample' => substr($html, 0, 1000)]);
-            
+            $xml = $response->getBody()->getContents();
+            Log::info('Successfully fetched RSS feed', ['content_length' => strlen($xml)]);
         } catch (GuzzleException $e) {
-            Log::error('Failed to fetch page with Guzzle', ['error' => $e->getMessage()]);
+            Log::error('Failed to fetch RSS feed', ['error' => $e->getMessage()]);
             return;
         } catch (\Exception $e) {
-            Log::error('Unexpected error when fetching page', ['error' => $e->getMessage()]);
+            Log::error('Unexpected error when fetching RSS feed', ['error' => $e->getMessage()]);
             return;
         }
 
         try {
-            $dom = new \DOMDocument();
-            @$dom->loadHTML($html);
-            $xpath = new \DOMXPath($dom);
+            // تحليل محتوى XML
+            $feed = new SimpleXMLElement($xml);
+            $namespace = $feed->getNamespaces(true);
             
-            // تجربة استعلامات XPath مختلفة
-            $articleNodes1 = $xpath->query('//article');
-            Log::info('Found article nodes with //article', ['count' => $articleNodes1->length]);
+            Log::info('RSS feed parsed successfully', ['title' => (string)$feed->title, 'entries' => count($feed->entry)]);
             
-            $articleNodes2 = $xpath->query('//div[contains(@class, "card")]');
-            Log::info('Found article nodes with //div[contains(@class, "card")]', ['count' => $articleNodes2->length]);
-            
-            $articleNodes3 = $xpath->query('//div[contains(@class, "article")]');
-            Log::info('Found article nodes with //div[contains(@class, "article")]', ['count' => $articleNodes3->length]);
-            
-            $articleNodes4 = $xpath->query('//div[contains(@class, "post")]');
-            Log::info('Found article nodes with //div[contains(@class, "post")]', ['count' => $articleNodes4->length]);
-            
-            $articleNodes5 = $xpath->query('//div[contains(@class, "essentials-card")]');
-            Log::info('Found article nodes with //div[contains(@class, "essentials-card")]', ['count' => $articleNodes5->length]);
-            
-            // استخدام الاستعلام الذي يعطي أكبر عدد من النتائج
-            $articleNodes = $articleNodes1;
-            $queryUsed = '//article';
-            
-            if ($articleNodes2->length > $articleNodes->length) {
-                $articleNodes = $articleNodes2;
-                $queryUsed = '//div[contains(@class, "card")]';
-            }
-            
-            if ($articleNodes3->length > $articleNodes->length) {
-                $articleNodes = $articleNodes3;
-                $queryUsed = '//div[contains(@class, "article")]';
-            }
-            
-            if ($articleNodes4->length > $articleNodes->length) {
-                $articleNodes = $articleNodes4;
-                $queryUsed = '//div[contains(@class, "post")]';
-            }
-            
-            if ($articleNodes5->length > $articleNodes->length) {
-                $articleNodes = $articleNodes5;
-                $queryUsed = '//div[contains(@class, "essentials-card")]';
-            }
-            
-            Log::info('Using XPath query', ['query' => $queryUsed, 'count' => $articleNodes->length]);
-
             $newArticles = [];
-
-            foreach ($articleNodes as $index => $node) {
+            
+            // استخراج المقالات من الـ feed
+            foreach ($feed->entry as $entry) {
                 try {
-                    // تجربة استعلامات مختلفة للعنوان
-                    $titleNode = $xpath->query('.//h2', $node)->item(0);
-                    if (!$titleNode) {
-                        $titleNode = $xpath->query('.//h3', $node)->item(0);
-                    }
-                    if (!$titleNode) {
-                        $titleNode = $xpath->query('.//h4', $node)->item(0);
-                    }
-                    if (!$titleNode) {
-                        $titleNode = $xpath->query('.//*[contains(@class, "title")]', $node)->item(0);
+                    $title = (string)$entry->title;
+                    $description = (string)$entry->summary;
+                    $link = '';
+                    
+                    // استخراج الرابط
+                    foreach ($entry->link as $linkElement) {
+                        $attributes = $linkElement->attributes();
+                        if (isset($attributes['rel']) && (string)$attributes['rel'] === 'alternate') {
+                            $link = (string)$attributes['href'];
+                            break;
+                        }
                     }
                     
-                    $title = $titleNode ? trim($titleNode->textContent) : null;
+                    // استخراج تاريخ النشر
+                    $published_at = date('Y-m-d', strtotime((string)$entry->updated));
                     
-                    // تجربة استعلامات مختلفة للرابط
-                    $linkNode = $xpath->query('.//a', $node)->item(0);
-                    $url = $linkNode ? 'https://www.psychologytoday.com' . $linkNode->getAttribute('href') : null;
+                    // استخدام اسم المؤلف من الـ feed
+                    $publisher_name = (string)$feed->author->n;
                     
-                    // تجربة استعلامات مختلفة للصورة
-                    $imgNode = $xpath->query('.//img', $node)->item(0);
-                    $image = $imgNode ? $imgNode->getAttribute('src') : self::DEFAULT_IMAGE;
+                    // استخدام صورة افتراضية
+                    $image = self::DEFAULT_IMAGE;
                     
-                    // تجربة استعلامات مختلفة للوصف
-                    $descNode = $xpath->query('.//p', $node)->item(0);
-                    if (!$descNode) {
-                        $descNode = $xpath->query('.//*[contains(@class, "description")]', $node)->item(0);
-                    }
-                    if (!$descNode) {
-                        $descNode = $xpath->query('.//*[contains(@class, "excerpt")]', $node)->item(0);
-                    }
+                    Log::info('Found article', [
+                        'title' => $title,
+                        'link' => $link,
+                        'published_at' => $published_at
+                    ]);
                     
-                    $description = $descNode ? trim($descNode->textContent) : '';
-                    
-                    // تجربة استعلامات مختلفة للكاتب
-                    $authorNode = $xpath->query('.//span[contains(@class,"author")]', $node)->item(0);
-                    if (!$authorNode) {
-                        $authorNode = $xpath->query('.//*[contains(@class, "author")]', $node)->item(0);
-                    }
-                    if (!$authorNode) {
-                        $authorNode = $xpath->query('.//*[contains(@class, "byline")]', $node)->item(0);
-                    }
-                    
-                    $author = $authorNode ? trim($authorNode->textContent) : 'Psychology Today';
-                    
-                    // تجربة استعلامات مختلفة للتاريخ
-                    $dateNode = $xpath->query('.//span[contains(@class,"date")]', $node)->item(0);
-                    if (!$dateNode) {
-                        $dateNode = $xpath->query('.//*[contains(@class, "date")]', $node)->item(0);
-                    }
-                    if (!$dateNode) {
-                        $dateNode = $xpath->query('.//*[contains(@class, "time")]', $node)->item(0);
-                    }
-                    
-                    $published_at = $dateNode ? trim($dateNode->textContent) : date('Y-m-d');
-
-                    if ($title) {
-                        Log::info('Found article', [
-                            'index' => $index, 
-                            'title' => $title,
-                            'url' => $url,
-                            'description_length' => strlen($description),
-                            'author' => $author,
-                            'published_at' => $published_at
-                        ]);
-                        
-                        $newArticles[] = [
-                            'title' => $title,
-                            'description' => $description ?: 'No description available',
-                            'publisher_name' => $author,
-                            'published_at' => $published_at,
-                            'article_image' => $image,
-                        ];
-                    } else {
-                        Log::warning('Skipping article node - no title found', ['index' => $index]);
-                    }
+                    $newArticles[] = [
+                        'title' => $title,
+                        'description' => $description,
+                        'publisher_name' => $publisher_name,
+                        'published_at' => $published_at,
+                        'article_image' => $image,
+                    ];
                 } catch (\Exception $e) {
-                    Log::error('Error processing article node', ['index' => $index, 'error' => $e->getMessage()]);
+                    Log::error('Error processing RSS entry', ['error' => $e->getMessage()]);
                 }
             }
-
+            
             Log::info('Parsed articles', ['count' => count($newArticles)]);
-
+            
             if (count($newArticles) > 0) {
                 try {
                     // حذف المقالات القديمة
@@ -221,7 +145,7 @@ class ImportArticlesJob implements ShouldQueue
                         }
                     }
                     
-                    Log::info('Articles import process completed');
+                    Log::info('Articles import process completed successfully', ['total_articles' => count($newArticles)]);
                 } catch (\Exception $e) {
                     Log::error('Failed to save articles to database', [
                         'error' => $e->getMessage(),
@@ -232,7 +156,7 @@ class ImportArticlesJob implements ShouldQueue
                 Log::warning('No articles were parsed or available.');
             }
         } catch (\Exception $e) {
-            Log::error('Error processing HTML content', [
+            Log::error('Error processing RSS feed content', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
