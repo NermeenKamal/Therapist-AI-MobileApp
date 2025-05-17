@@ -15,8 +15,6 @@ use App\Controllers\DoctorScheduleController;
 use App\Controllers\DoctorController;
 use App\Controllers\ArticleController;
 
-Route::get('/articles', [ArticleController::class, 'index']);
-
 // reset password routes
 Route::post('/forgot-password', [ForgotPasswordController::class, 'sendResetLink']);
 Route::post('/reset-password', [ForgotPasswordController::class, 'reset'])->name('password.reset');
@@ -67,6 +65,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/doctors', [DoctorController::class, 'index']);
     // تفاصيل دكتور واحد
     Route::get('/doctors/{id}', [DoctorController::class, 'show']);
+
+    // Article Routes
+    Route::get('/articles', [ArticleController::class, 'index']);
 });
 
 
@@ -298,6 +299,6 @@ Route::middleware('auth:sanctum')->group(function () {
 //    Route::get('/patient/report', [ReportController::class, 'download']);
 //
 //    // Article Routes
-//    // Route::get('/articles', [ArticleController::class, 'index']);
+//    Route::get('/articles', [ArticleController::class, 'index']);
 //
 //});
