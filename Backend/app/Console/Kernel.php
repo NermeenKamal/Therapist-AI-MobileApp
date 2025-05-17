@@ -4,7 +4,7 @@ namespace App\Console;
 
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
-use App\Console\Commands\ImportArticlesCommand;
+use App\Console\Commands\ImportArticles;
 
 class Kernel extends ConsoleKernel
 {
@@ -14,13 +14,13 @@ class Kernel extends ConsoleKernel
      * @var array
      */
     protected $commands = [
-        ImportArticlesCommand::class,
+        Commands\ImportArticles::class,
     ];
 
     protected function schedule(Schedule $schedule): void
     {
         // تشغيل استيراد المقالات يومياً في الساعة 12 صباحاً
-        $schedule->command('articles:import')->dailyAt('00:00');
+        $schedule->command('import:articles')->dailyAt('00:00');
     }
 
     protected function commands(): void
