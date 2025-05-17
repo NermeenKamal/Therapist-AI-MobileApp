@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Exception;
+use SendGrid;
+use SendGrid\Mail\Mail as SendGridMail;
 
 class ForgotPasswordController extends Controller
 {
@@ -48,20 +50,37 @@ class ForgotPasswordController extends Controller
 
             Log::info('Reset code saved to database for email: ' . $request->email);
 
-            // إرسال البريد مع الكود
+            // إرسال البريد باستخدام SendGrid
             $emailSent = false;
             try {
-                Mail::raw(
+                $email = new SendGridMail();
+                $email->setFrom(config('mail.from.address'), config('mail.from.name'));
+                $email->setSubject('Password Reset Verification Code');
+                $email->addTo($request->email);
+                $email->addContent(
+                    "text/plain",
                     "Your password reset verification code is: " . $code . "\n\n" .
                     "This code will expire in 1 hour.\n" .
-                    "If you did not request a password reset, please ignore this email.",
-                    function($message) use ($request) {
-                        $message->to($request->email)
-                                ->subject('Password Reset Verification Code');
-                    }
+                    "If you did not request a password reset, please ignore this email."
                 );
-                $emailSent = true;
-                Log::info('Reset code email sent successfully to: ' . $request->email);
+                $email->addContent(
+                    "text/html",
+                    "<h2>Password Reset Code</h2>" .
+                    "<p>Your verification code is: <strong>" . $code . "</strong></p>" .
+                    "<p>This code will expire in 1 hour.</p>" .
+                    "<p>If you did not request a password reset, please ignore this email.</p>"
+                );
+
+                $sendgrid = new SendGrid(config('services.sendgrid.key'));
+                $response = $sendgrid->send($email);
+
+                if ($response->statusCode() >= 200 && $response->statusCode() < 300) {
+                    $emailSent = true;
+                    Log::info('Reset code email sent successfully to: ' . $request->email);
+                } else {
+                    throw new Exception('SendGrid API returned status code: ' . $response->statusCode());
+                }
+
             } catch (Exception $mailException) {
                 Log::error('Failed to send reset code email', [
                     'email' => $request->email,
