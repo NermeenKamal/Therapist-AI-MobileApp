@@ -81,16 +81,16 @@ class ImportArticlesJob implements ShouldQueue
             
             // تعريف صور متنوعة بناءً على الكلمات المفتاحية في العنوان
             $imageKeywords = [
-                'brain' => 'https://www.nimh.nih.gov/sites/default/files/images/brain-research.jpg',
-                'memory' => 'https://www.nimh.nih.gov/sites/default/files/images/memory-research.jpg',
-                'depression' => 'https://www.nimh.nih.gov/sites/default/files/images/depression.jpg',
-                'suicide' => 'https://www.nimh.nih.gov/sites/default/files/images/suicide-prevention.jpg',
-                'mental health' => 'https://www.nimh.nih.gov/sites/default/files/images/mental-health.jpg',
-                'anxiety' => 'https://www.nimh.nih.gov/sites/default/files/images/anxiety.jpg',
-                'bipolar' => 'https://www.nimh.nih.gov/sites/default/files/images/bipolar.jpg',
-                'psychosis' => 'https://www.nimh.nih.gov/sites/default/files/images/psychosis.jpg',
-                'treatment' => 'https://www.nimh.nih.gov/sites/default/files/images/treatment.jpg',
-                'research' => 'https://www.nimh.nih.gov/sites/default/files/images/research.jpg',
+                'brain' => 'https://www.pexels.com/photo/an-illustration-of-a-person-s-mind-8378740/',
+                'memory' => 'https://www.pexels.com/photo/woman-wearing-a-face-mask-4495118/',
+                'depression' => 'https://www.pexels.com/photo/person-hands-woman-hand-6756091/',
+                'suicide' => 'https://www.pexels.com/photo/light-arm-hands-people-6756086/',
+                'mental health' => 'https://www.pexels.com/photo/the-words-mental-health-on-laptop-screen-3958406/',
+                'anxiety' => 'https://www.pexels.com/photo/woman-in-blue-long-sleeve-shirt-holding-pen-4101206/',
+                'bipolar' => 'https://www.pexels.com/photo/person-in-black-and-green-blazer-8412813/',
+                'psychosis' => 'https://www.pexels.com/photo/woman-in-white-shirt-wearing-eyeglasses-6764112/',
+                'treatment' => 'https://www.pexels.com/photo/close-up-photo-of-medicinal-drugs-159211/',
+                'research' => 'https://www.pexels.com/photo/selective-focus-photo-of-magnifying-glass-1194775/',
             ];
             
             // تعريف أسماء ناشرين متنوعة
