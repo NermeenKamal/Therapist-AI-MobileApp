@@ -24,8 +24,15 @@ class ImportArticlesJob implements ShouldQueue
      */
     public function handle()
     {
+        // 1. حذف كل المقالات القديمة
+        \App\Models\Article::truncate();
+
+        // 2. جلب المقالات من الـ RSS (نفس الكود الحالي)
         $rssFeed = simplexml_load_file('https://news.google.com/rss/search?q=mental+health');
+        $count = 0;
         foreach ($rssFeed->channel->item as $item) {
+            if ($count >= 100) break; // لا تتعدى 100 مقال
+
             // استخراج رابط الصورة من <image> أو <media:content> أو استخدام صورة افتراضية
             $imageUrl = null;
             $namespaces = $item->getNameSpaces(true);
@@ -67,6 +74,15 @@ class ImportArticlesJob implements ShouldQueue
                     'article_image' => $imageName,
                 ]
             );
+
+            $count++;
+        }
+
+        // 3. لو لأي سبب زاد العدد عن 100 (مثلاً لو أضفت مقالات يدوياً)، احذف الأقدم:
+        $total = \App\Models\Article::count();
+        if ($total > 100) {
+            $toDelete = $total - 100;
+            \App\Models\Article::orderBy('created_at')->limit($toDelete)->delete();
         }
     }
 
