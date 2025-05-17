@@ -10,9 +10,11 @@ class Article extends Model
         'title',
         'description',
         'publisher_name',
-        'publisher_image',
-        'article_image',
         'published_at',
+        'article_image',
     ];
 
-}
+    protected $casts = [
+        'published_at' => 'datetime',
+    ];
+} 
