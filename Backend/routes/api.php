@@ -13,6 +13,9 @@ use App\Controllers\ForgotPasswordController;
 use App\Controllers\AIChatbotController;
 use App\Controllers\DoctorScheduleController;
 use App\Controllers\DoctorController;
+use App\Controllers\ArticleController;
+
+Route::get('/articles', [ArticleController::class, 'index']);
 
 // reset password routes
 Route::post('/forgot-password', [ForgotPasswordController::class, 'sendResetLink']);
@@ -64,8 +67,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/doctors', [DoctorController::class, 'index']);
     // تفاصيل دكتور واحد
     Route::get('/doctors/{id}', [DoctorController::class, 'show']);
-
-    Route::post('/save-fcm-token', [AuthController::class, 'saveFcmToken']);
 });
 
 
@@ -297,6 +298,6 @@ Route::middleware('auth:sanctum')->group(function () {
 //    Route::get('/patient/report', [ReportController::class, 'download']);
 //
 //    // Article Routes
-//    Route::get('/articles', [ArticleController::class, 'index']);
+//    // Route::get('/articles', [ArticleController::class, 'index']);
 //
 //});
