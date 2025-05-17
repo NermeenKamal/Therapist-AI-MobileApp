@@ -225,7 +225,8 @@ class AuthController extends Controller
             ], 401);
         }
 
-        $token = $patient->createToken('auth_token')->plainTextToken;
+        // إنشاء token مع تحديد نوع المستخدم في الـ abilities
+        $token = $patient->createToken('auth_token', ['role:patient'])->plainTextToken;
 
         return response()->json([
             'message' => 'Logged in successfully',
@@ -261,13 +262,39 @@ class AuthController extends Controller
             ], 403);
         }
 
-        $token = $doctor->createToken('auth_token')->plainTextToken;
+        // إنشاء token مع تحديد نوع المستخدم في الـ abilities
+        $token = $doctor->createToken('auth_token', ['role:doctor'])->plainTextToken;
 
         return response()->json([
             'message' => 'Logged in successfully',
             'user' => $doctor,
             'token' => $token,
             'user_type' => 'doctor'
+        ]);
+    }
+
+    /**
+     * Get the authenticated user with their type
+     */
+    public function getAuthenticatedUser(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $userType = 'unknown';
+
+        // تحديد نوع المستخدم من الـ token abilities
+        if ($user->currentAccessToken()->can('role:patient')) {
+            $userType = 'patient';
+            // تحميل بيانات المريض الكاملة
+            $user = Patient::find($user->id);
+        } elseif ($user->currentAccessToken()->can('role:doctor')) {
+            $userType = 'doctor';
+            // تحميل بيانات الطبيب الكاملة
+            $user = Doctor::find($user->id);
+        }
+
+        return response()->json([
+            'user' => $user,
+            'user_type' => $userType
         ]);
     }
 
