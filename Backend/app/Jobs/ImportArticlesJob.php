@@ -27,6 +27,15 @@ class ImportArticlesJob implements ShouldQueue
         // 1. جلب المقالات وتخزينها مؤقتًا في مصفوفة
         $newArticles = [];
         $rssFeed = simplexml_load_file('https://news.google.com/rss/search?q=mental+health');
+
+        // جلب صورة الـ feed العامة
+        $defaultImageUrl = null;
+        if (isset($rssFeed->channel->image->url)) {
+            $defaultImageUrl = (string) $rssFeed->channel->image->url;
+        } else {
+            $defaultImageUrl = 'https://th.bing.com/th/id/OIP.a0NRZ33m0j4afFvhw-nvSQHaGC?cb=iwc2&rs=1&pid=ImgDetMain';
+        }
+
         $count = 0;
         foreach ($rssFeed->channel->item as $item) {
             if ($count >= 100) break; // لا تتعدى 100 مقال
@@ -45,7 +54,7 @@ class ImportArticlesJob implements ShouldQueue
             }
             // صورة افتراضية إذا لم توجد صورة في الخبر
             if (!$imageUrl) {
-                $imageUrl = 'https://th.bing.com/th/id/OIP.a0NRZ33m0j4afFvhw-nvSQHaGC?cb=iwc2&rs=1&pid=ImgDetMain';
+                $imageUrl = $defaultImageUrl;
             }
 
             // تحميل الصورة وتخزينها محليًا
