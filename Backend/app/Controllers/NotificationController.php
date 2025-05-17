@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Controllers;
 
 use App\Services\FCMService;
 use Illuminate\Http\Request;
