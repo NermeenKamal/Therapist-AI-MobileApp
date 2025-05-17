@@ -24,10 +24,8 @@ class ImportArticlesJob implements ShouldQueue
      */
     public function handle()
     {
-        // 1. حذف كل المقالات القديمة
-        \App\Models\Article::truncate();
-
-        // 2. جلب المقالات من الـ RSS (نفس الكود الحالي)
+        // 1. جلب المقالات وتخزينها مؤقتًا في مصفوفة
+        $newArticles = [];
         $rssFeed = simplexml_load_file('https://news.google.com/rss/search?q=mental+health');
         $count = 0;
         foreach ($rssFeed->channel->item as $item) {
@@ -65,17 +63,28 @@ class ImportArticlesJob implements ShouldQueue
                 Log::error('Image fetch failed', ['error' => $e->getMessage(), 'url' => $imageUrl]);
             }
 
-            \App\Models\Article::updateOrCreate(
-                ['title' => (string) $item->title],
-                [
-                    'description' => strip_tags((string) $item->description),
-                    'publisher_name' => isset($item->source) ? (string) $item->source : 'Google News',
-                    'published_at' => new \DateTime((string) $item->pubDate),
-                    'article_image' => $imageName,
-                ]
-            );
+            $newArticles[] = [
+                'title' => (string) $item->title,
+                'description' => strip_tags((string) $item->description),
+                'publisher_name' => isset($item->source) ? (string) $item->source : 'Google News',
+                'published_at' => new \DateTime((string) $item->pubDate),
+                'article_image' => $imageName,
+            ];
 
             $count++;
+        }
+
+        // 2. إذا نجح جلب عدد كافٍ من المقالات (مثلاً >= 10)
+        if (count($newArticles) > 0) {
+            // امسح القديم
+            \App\Models\Article::truncate();
+            // أضف الجديد
+            foreach ($newArticles as $data) {
+                \App\Models\Article::create($data);
+            }
+        } else {
+            // لا تمسح القديم إذا لم ينجح الاستيراد
+            // ويمكنك إرسال إشعار أو تسجيل خطأ
         }
 
         // 3. لو لأي سبب زاد العدد عن 100 (مثلاً لو أضفت مقالات يدوياً)، احذف الأقدم:
