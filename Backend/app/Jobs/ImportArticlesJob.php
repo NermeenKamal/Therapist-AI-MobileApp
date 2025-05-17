@@ -5,6 +5,7 @@ namespace App\Jobs;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 
 class ImportArticlesJob implements ShouldQueue
 {
@@ -44,12 +45,17 @@ class ImportArticlesJob implements ShouldQueue
 
             // تحميل الصورة وتخزينها محليًا
             $imageName = null;
+            Log::info('Trying to fetch image', ['url' => $imageUrl]);
             try {
-                $imageContents = \Illuminate\Support\Facades\Http::get($imageUrl)->body();
+                $response = \Illuminate\Support\Facades\Http::get($imageUrl);
+                Log::info('Image HTTP status', ['status' => $response->status()]);
+                $imageContents = $response->body();
                 $imageName = 'articles/' . uniqid() . '.jpg';
                 \Illuminate\Support\Facades\Storage::disk('public')->put($imageName, $imageContents);
+                Log::info('Image saved', ['name' => $imageName]);
             } catch (\Exception $e) {
                 $imageName = null;
+                Log::error('Image fetch failed', ['error' => $e->getMessage(), 'url' => $imageUrl]);
             }
 
             \App\Models\Article::updateOrCreate(
