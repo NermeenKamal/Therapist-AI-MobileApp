@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Controllers;
 
 use App\Models\ChatMessage;
 use App\Services\FCMService;
