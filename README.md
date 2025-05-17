@@ -74,13 +74,11 @@ php artisan migrate
 php artisan serve
 ```
 
-> Make sure you have your Firebase credentials and the AI model API URLs in your `.env` file.
-
 ---
 
 ## 🔗 API Integration Overview
 
-```mermaid
+```
 graph LR
 User --> Laravel_Backend
 Laravel_Backend --> Firebase_Chat
