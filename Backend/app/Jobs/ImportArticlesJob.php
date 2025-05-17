@@ -54,10 +54,18 @@ class ImportArticlesJob implements ShouldQueue
             try {
                 $response = \Illuminate\Support\Facades\Http::get($imageUrl);
                 Log::info('Image HTTP status', ['status' => $response->status()]);
+                if ($response->status() !== 200) {
+                    Log::error('Image HTTP error', ['status' => $response->status(), 'url' => $imageUrl]);
+                }
                 $imageContents = $response->body();
                 $imageName = 'articles/' . uniqid() . '.jpg';
                 \Illuminate\Support\Facades\Storage::disk('public')->put($imageName, $imageContents);
                 Log::info('Image saved', ['name' => $imageName]);
+                if (Storage::disk('public')->exists($imageName)) {
+                    Log::info('Image exists after save', ['name' => $imageName]);
+                } else {
+                    Log::error('Image NOT saved', ['name' => $imageName]);
+                }
             } catch (\Exception $e) {
                 $imageName = null;
                 Log::error('Image fetch failed', ['error' => $e->getMessage(), 'url' => $imageUrl]);
