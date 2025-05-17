@@ -27,6 +27,8 @@ class ImportArticlesJob implements ShouldQueue
      */
     public function handle()
     {
+        Log::info('ImportArticlesJob started from Psychology Today');
+
         $this->ensureStorageDirectories();
 
         $newArticles = [];
@@ -112,4 +114,3 @@ class ImportArticlesJob implements ShouldQueue
         }
     }
 }
-
