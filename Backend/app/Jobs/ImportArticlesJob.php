@@ -1,92 +1,57 @@
 <?php
 
-namespace App\Jobs;
+namespace App\Console\Commands;
 
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Foundation\Bus\Dispatchable;
-use Illuminate\Queue\InteractsWithQueue;
-use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Log;
-use App\Models\Article;
-use Spatie\Browsershot\Browsershot;
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
-class ImportArticlesJob implements ShouldQueue
+class TestDatabaseConnection extends Command
 {
-    use Dispatchable, InteractsWithQueue, SerializesModels;
-
-    private const DEFAULT_IMAGE = 'https://th.bing.com/th/id/OIP.a0NRZ33m0j4afFvhw-nvSQHaGC?cb=iwc2&rs=1&pid=ImgDetMain';
-
-    public function __construct()
-    {
-        //
-    }
+    protected $signature = 'db:test';
+    protected $description = 'Test database connection and create a test record';
 
     public function handle()
     {
-        Log::info('ImportArticlesJob started...');
-
-        // استخدام Browsershot
+        $this->info('Testing database connection...');
+        
         try {
-            $html = Browsershot::url('https://www.psychologytoday.com/us/essentials')
-                ->userAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0 Safari/537.36')
-                ->timeout(30)
-                ->bodyHtml();
+            DB::connection()->getPdo();
+            $this->info('✓ Database connection successful: ' . DB::connection()->getDatabaseName());
+            
+            $this->info('Testing if articles table exists...');
+            if (Schema::hasTable('articles')) {
+                $this->info('✓ Articles table exists');
+                
+                $this->info('Testing insert into articles table...');
+                $id = DB::table('articles')->insertGetId([
+                    'title' => 'Test Article ' . date('Y-m-d H:i:s'),
+                    'description' => 'This is a test article to verify database connectivity',
+                    'publisher_name' => 'Database Test Command',
+                    'published_at' => now()->format('Y-m-d'),
+                    'article_image' => 'https://example.com/test-image.jpg',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+                
+                $this->info('✓ Successfully inserted test article with ID: ' . $id);
+                
+                $count = DB::table('articles')->count();
+                $this->info('Total articles in database: ' . $count);
+            } else {
+                $this->error('✗ Articles table does not exist!');
+                
+                $this->info('Available tables:');
+                $tables = DB::select('SHOW TABLES');
+                foreach ($tables as $table) {
+                    $tableName = array_values(get_object_vars($table))[0];
+                    $this->line(' - ' . $tableName);
+                }
+            }
         } catch (\Exception $e) {
-            Log::error('Failed to fetch page with Browsershot', ['error' => $e->getMessage()]);
-            return;
+            $this->error('✗ Database connection failed: ' . $e->getMessage());
         }
-
-        $dom = new \DOMDocument();
-        @$dom->loadHTML($html);
-        $xpath = new \DOMXPath($dom);
-
-        $newArticles = [];
-
-        foreach ($xpath->query('//article') as $node) {
-            $titleNode = $xpath->query('.//h2', $node)->item(0);
-            $title = $titleNode ? trim($titleNode->textContent) : null;
-
-            $linkNode = $xpath->query('.//a', $node)->item(0);
-            $url = $linkNode ? 'https://www.psychologytoday.com' . $linkNode->getAttribute('href') : null;
-
-            $imgNode = $xpath->query('.//img', $node)->item(0);
-            $image = $imgNode ? $imgNode->getAttribute('src') : self::DEFAULT_IMAGE;
-
-            $descNode = $xpath->query('.//p', $node)->item(0);
-            $description = $descNode ? trim($descNode->textContent) : '';
-
-            $authorNode = $xpath->query('.//span[contains(@class,"author")]', $node)->item(0);
-            $author = $authorNode ? trim($authorNode->textContent) : 'Psychology Today';
-
-            $dateNode = $xpath->query('.//span[contains(@class,"date")]', $node)->item(0);
-            $published_at = $dateNode ? trim($dateNode->textContent) : null;
-
-            if ($title && $url) {
-                $newArticles[] = [
-                    'title' => $title,
-                    'description' => $description,
-                    'publisher_name' => $author,
-                    'published_at' => $published_at,
-                    'article_image' => $image,
-                ];
-            }
-        }
-
-        if (count($newArticles) > 0) {
-            Article::truncate();
-            foreach ($newArticles as $article) {
-                Article::create($article);
-            }
-            Log::info('Articles imported successfully', ['count' => count($newArticles)]);
-        } else {
-            Log::warning('No articles were parsed or available.');
-        }
-
-        $total = Article::count();
-        if ($total > 100) {
-            $toDelete = $total - 100;
-            Article::orderBy('created_at')->limit($toDelete)->delete();
-            Log::info('Old articles deleted', ['count' => $toDelete]);
-        }
+        
+        return Command::SUCCESS;
     }
 }
