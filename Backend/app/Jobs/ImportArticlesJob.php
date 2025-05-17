@@ -67,6 +67,8 @@ class ImportArticlesJob implements ShouldQueue
             }
         }
 
+        dd($newArticles);
+
         // 2. إذا نجح جلب عدد كافٍ من المقالات (مثلاً >= 10)
         if (count($newArticles) > 0) {
             \App\Models\Article::truncate();
