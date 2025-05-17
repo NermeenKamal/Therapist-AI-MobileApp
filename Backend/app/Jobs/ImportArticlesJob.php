@@ -23,46 +23,62 @@ class ImportArticlesJob implements ShouldQueue
     }
 
     public function handle()
-    {
-        Log::info('ImportArticlesJob started...');
+{
+    Log::info('ImportArticlesJob started...');
+    
+    // اختبار الاتصال بقاعدة البيانات
+    try {
+        $testArticle = Article::create([
+            'title' => 'Test Article ' . date('Y-m-d H:i:s'),
+            'description' => 'This is a test article',
+            'publisher_name' => 'Test',
+            'published_at' => date('Y-m-d'),
+            'article_image' => 'https://example.com/test.jpg',
+        ] );
+        
+        Log::info('Test article created successfully', ['id' => $testArticle->id]);
+    } catch (\Exception $e) {
+        Log::error('Failed to create test article', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+    }
+    
+    // استخدام Guzzle بدلاً من Browsershot
+    try {
+        $client = new \GuzzleHttp\Client();
+        $response = $client->get('https://www.psychologytoday.com/us/essentials', [
+            'headers' => [
+                'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64 ) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0 Safari/537.36',
+            ],
+            'timeout' => 30,
+        ]);
+        $html = $response->getBody()->getContents();
+        Log::info('Successfully fetched page with Guzzle', ['content_length' => strlen($html)]);
+    } catch (\Exception $e) {
+        Log::error('Failed to fetch page with Guzzle', ['error' => $e->getMessage()]);
+        return;
+    }
 
-        // استخدام Guzzle بدلاً من Browsershot
-        try {
-            $client = new Client();
-            $response = $client->get('https://www.psychologytoday.com/us/essentials', [
-                'headers' => [
-                    'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0 Safari/537.36',
-                ],
-                'timeout' => 30,
-            ]);
-            $html = $response->getBody()->getContents();
-            Log::info('Successfully fetched page with Guzzle');
-        } catch (GuzzleException $e) {
-            Log::error('Failed to fetch page with Guzzle', ['error' => $e->getMessage()]);
-            return;
-        } catch (\Exception $e) {
-            Log::error('Unexpected error when fetching page', ['error' => $e->getMessage()]);
-            return;
-        }
+    try {
+        $dom = new \DOMDocument();
+        @$dom->loadHTML($html);
+        $xpath = new \DOMXPath($dom);
 
-        try {
-            $dom = new \DOMDocument();
-            @$dom->loadHTML($html);
-            $xpath = new \DOMXPath($dom);
+        $newArticles = [];
 
-            $newArticles = [];
-
-            foreach ($xpath->query('//article') as $node) {
+        foreach ($xpath->query('//article') as $index => $node) {
+            try {
                 $titleNode = $xpath->query('.//h2', $node)->item(0);
                 $title = $titleNode ? trim($titleNode->textContent) : null;
 
                 $linkNode = $xpath->query('.//a', $node)->item(0);
-                $url = $linkNode ? 'https://www.psychologytoday.com' . $linkNode->getAttribute('href') : null;
+                $url = $linkNode ? 'https://www.psychologytoday.com' . $linkNode->getAttribute('href' ) : null;
 
                 $imgNode = $xpath->query('.//img', $node)->item(0);
-                $image = $imgNode ? $imgNode->getAttribute('src') : self::DEFAULT_IMAGE;
+                $image = $imgNode ? $imgNode->getAttribute('src') : 'https://example.com/default.jpg';
 
-                $descNode = $xpath->query('.//p', $node)->item(0);
+                $descNode = $xpath->query('.//p', $node )->item(0);
                 $description = $descNode ? trim($descNode->textContent) : '';
 
                 $authorNode = $xpath->query('.//span[contains(@class,"author")]', $node)->item(0);
@@ -72,7 +88,7 @@ class ImportArticlesJob implements ShouldQueue
                 $published_at = $dateNode ? trim($dateNode->textContent) : date('Y-m-d');
 
                 if ($title && $url) {
-                    Log::info('Found article', ['title' => $title]);
+                    Log::info('Found article', ['index' => $index, 'title' => $title]);
                     $newArticles[] = [
                         'title' => $title,
                         'description' => $description,
@@ -81,60 +97,50 @@ class ImportArticlesJob implements ShouldQueue
                         'article_image' => $image,
                     ];
                 }
-            }
-
-            Log::info('Parsed articles', ['count' => count($newArticles)]);
-
-            if (count($newArticles) > 0) {
-                try {
-                    // حذف المقالات القديمة
-                    Log::info('Truncating articles table');
-                    Article::truncate();
-                    
-                    // إضافة المقالات الجديدة
-                    foreach ($newArticles as $article) {
-                        try {
-                            $result = Article::create($article);
-                            Log::info('Article created', ['id' => $result->id, 'title' => $result->title]);
-                        } catch (\Exception $e) {
-                            Log::error('Failed to create article', [
-                                'article' => $article,
-                                'error' => $e->getMessage()
-                            ]);
-                        }
-                    }
-                    
-                    Log::info('Articles imported successfully', ['count' => count($newArticles)]);
-                } catch (\Exception $e) {
-                    Log::error('Failed to save articles to database', [
-                        'error' => $e->getMessage(),
-                        'trace' => $e->getTraceAsString()
-                    ]);
-                }
-            } else {
-                Log::warning('No articles were parsed or available.');
-            }
-
-            // التحقق من عدد المقالات وحذف القديمة إذا تجاوز العدد 100
-            try {
-                $total = Article::count();
-                Log::info('Total articles in database', ['count' => $total]);
-                
-                if ($total > 100) {
-                    $toDelete = $total - 100;
-                    Article::orderBy('created_at')->limit($toDelete)->delete();
-                    Log::info('Old articles deleted', ['count' => $toDelete]);
-                }
             } catch (\Exception $e) {
-                Log::error('Failed to manage article count', [
-                    'error' => $e->getMessage()
+                Log::error('Error processing article node', ['index' => $index, 'error' => $e->getMessage()]);
+            }
+        }
+
+        Log::info('Parsed articles', ['count' => count($newArticles)]);
+
+        if (count($newArticles) > 0) {
+            try {
+                // حذف المقالات القديمة
+                Log::info('Truncating articles table');
+                Article::truncate();
+                Log::info('Articles table truncated successfully');
+                
+                // إضافة المقالات الجديدة
+                foreach ($newArticles as $index => $article) {
+                    try {
+                        $result = Article::create($article);
+                        Log::info('Article created', ['index' => $index, 'id' => $result->id, 'title' => $result->title]);
+                    } catch (\Exception $e) {
+                        Log::error('Failed to create article', [
+                            'index' => $index,
+                            'article' => $article,
+                            'error' => $e->getMessage()
+                        ]);
+                    }
+                }
+                
+                Log::info('Articles import process completed');
+            } catch (\Exception $e) {
+                Log::error('Failed to save articles to database', [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
                 ]);
             }
-        } catch (\Exception $e) {
-            Log::error('Error processing HTML content', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
+        } else {
+            Log::warning('No articles were parsed or available.');
         }
+    } catch (\Exception $e) {
+        Log::error('Error processing HTML content', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
     }
+}
+
 }
