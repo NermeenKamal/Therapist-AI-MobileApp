@@ -6,10 +6,13 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Http;
 
 class ImportArticlesJob implements ShouldQueue
 {
     use Queueable;
+
+    private const DEFAULT_IMAGE = 'https://th.bing.com/th/id/OIP.a0NRZ33m0j4afFvhw-nvSQHaGC?cb=iwc2&rs=1&pid=ImgDetMain';
 
     /**
      * Create a new job instance.
@@ -24,6 +27,24 @@ class ImportArticlesJob implements ShouldQueue
      */
     public function handle()
     {
+        // التحقق من صحة الصورة الافتراضية
+        try {
+            $defaultImageResponse = Http::get(self::DEFAULT_IMAGE);
+            if ($defaultImageResponse->status() !== 200) {
+                Log::error('Default image is not accessible', [
+                    'url' => self::DEFAULT_IMAGE,
+                    'status' => $defaultImageResponse->status()
+                ]);
+            } else {
+                Log::info('Default image is accessible');
+            }
+        } catch (\Exception $e) {
+            Log::error('Failed to access default image', [
+                'url' => self::DEFAULT_IMAGE,
+                'error' => $e->getMessage()
+            ]);
+        }
+
         // 1. جلب المقالات وتخزينها مؤقتًا في مصفوفة
         $newArticles = [];
         $rssFeed = simplexml_load_file('https://news.google.com/rss/search?q=mental+health');
@@ -52,30 +73,61 @@ class ImportArticlesJob implements ShouldQueue
             }
             // صورة افتراضية إذا لم توجد صورة في الخبر
             if (!$imageUrl) {
-                $imageUrl = $channelImage;
+                $imageUrl = self::DEFAULT_IMAGE;
             }
 
             // تحميل الصورة وتخزينها محليًا
-            $imageName = null;
-            Log::info('Trying to fetch image', ['url' => $imageUrl]);
+            $imagePath = null;
+            Log::info('Processing article image', [
+                'article_title' => (string) $item->title,
+                'image_url' => $imageUrl
+            ]);
+
             try {
-                $response = \Illuminate\Support\Facades\Http::get($imageUrl);
+                $response = Http::get($imageUrl);
                 Log::info('Image HTTP status', ['status' => $response->status()]);
+                
                 if ($response->status() !== 200) {
-                    Log::error('Image HTTP error', ['status' => $response->status(), 'url' => $imageUrl]);
-                }
-                $imageContents = $response->body();
-                $imageName = 'articles/' . uniqid() . '.jpg';
-                \Illuminate\Support\Facades\Storage::disk('public')->put($imageName, $imageContents);
-                Log::info('Image saved', ['name' => $imageName]);
-                if (Storage::disk('public')->exists($imageName)) {
-                    Log::info('Image exists after save', ['name' => $imageName]);
+                    Log::error('Image HTTP error', [
+                        'status' => $response->status(),
+                        'url' => $imageUrl
+                    ]);
+                    $imagePath = self::DEFAULT_IMAGE;
                 } else {
-                    Log::error('Image NOT saved', ['name' => $imageName]);
+                    $imageContents = $response->body();
+                    $imagePath = 'articles/' . uniqid() . '.jpg';
+                    
+                    // التأكد من وجود المجلد
+                    if (!Storage::disk('public')->exists('articles')) {
+                        Storage::disk('public')->makeDirectory('articles');
+                    }
+                    
+                    $saved = Storage::disk('public')->put($imagePath, $imageContents);
+                    
+                    if ($saved) {
+                        Log::info('Image saved successfully', [
+                            'path' => $imagePath,
+                            'size' => Storage::disk('public')->size($imagePath)
+                        ]);
+                        
+                        // التحقق من وجود الملف بعد الحفظ
+                        if (Storage::disk('public')->exists($imagePath)) {
+                            Log::info('Image exists after save', ['path' => $imagePath]);
+                        } else {
+                            Log::error('Image NOT saved', ['path' => $imagePath]);
+                            $imagePath = self::DEFAULT_IMAGE;
+                        }
+                    } else {
+                        Log::error('Failed to save image', ['path' => $imagePath]);
+                        $imagePath = self::DEFAULT_IMAGE;
+                    }
                 }
             } catch (\Exception $e) {
-                $imageName = null;
-                Log::error('Image fetch failed', ['error' => $e->getMessage(), 'url' => $imageUrl]);
+                $imagePath = self::DEFAULT_IMAGE;
+                Log::error('Image fetch failed', [
+                    'error' => $e->getMessage(),
+                    'url' => $imageUrl
+                ]);
             }
 
             $newArticles[] = [
@@ -83,7 +135,7 @@ class ImportArticlesJob implements ShouldQueue
                 'description' => strip_tags((string) $item->description),
                 'publisher_name' => isset($item->source) ? (string) $item->source : 'Google News',
                 'published_at' => new \DateTime((string) $item->pubDate),
-                'article_image' => $imageName,
+                'article_image' => $imagePath,
             ];
 
             $count++;
@@ -97,9 +149,9 @@ class ImportArticlesJob implements ShouldQueue
             foreach ($newArticles as $data) {
                 \App\Models\Article::create($data);
             }
+            Log::info('Articles imported successfully', ['count' => count($newArticles)]);
         } else {
-            // لا تمسح القديم إذا لم ينجح الاستيراد
-            // ويمكنك إرسال إشعار أو تسجيل خطأ
+            Log::error('No articles were imported');
         }
 
         // 3. لو لأي سبب زاد العدد عن 100 (مثلاً لو أضفت مقالات يدوياً)، احذف الأقدم:
@@ -107,7 +159,7 @@ class ImportArticlesJob implements ShouldQueue
         if ($total > 100) {
             $toDelete = $total - 100;
             \App\Models\Article::orderBy('created_at')->limit($toDelete)->delete();
+            Log::info('Deleted old articles', ['count' => $toDelete]);
         }
     }
-
 }
