@@ -20,8 +20,8 @@ class BertSentimentService
      */
     public function analyze(string $message): array
     {
-        $response = Http::post($this->bertEndpoint, [
-            'message' => $message
+        $response = Http::post($this->bertEndpoint . '/analyze', [
+            'text' => $message
         ]);
 
         if ($response->successful()) {
