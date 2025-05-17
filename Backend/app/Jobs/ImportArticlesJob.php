@@ -29,11 +29,9 @@ class ImportArticlesJob implements ShouldQueue
         $rssFeed = simplexml_load_file('https://news.google.com/rss/search?q=mental+health');
 
         // جلب صورة الـ feed العامة
-        $defaultImageUrl = null;
+        $channelImage = null;
         if (isset($rssFeed->channel->image->url)) {
-            $defaultImageUrl = (string) $rssFeed->channel->image->url;
-        } else {
-            $defaultImageUrl = 'https://th.bing.com/th/id/OIP.a0NRZ33m0j4afFvhw-nvSQHaGC?cb=iwc2&rs=1&pid=ImgDetMain';
+            $channelImage = (string) $rssFeed->channel->image->url;
         }
 
         $count = 0;
@@ -49,12 +47,12 @@ class ImportArticlesJob implements ShouldQueue
                     $imageUrl = (string) $media->content->attributes()->url;
                 }
             }
-            if (!$imageUrl && isset($item->image)) {
-                $imageUrl = (string) $item->image->url;
+            if (!$imageUrl && $channelImage) {
+                $imageUrl = $channelImage;
             }
             // صورة افتراضية إذا لم توجد صورة في الخبر
             if (!$imageUrl) {
-                $imageUrl = $defaultImageUrl;
+                $imageUrl = $channelImage;
             }
 
             // تحميل الصورة وتخزينها محليًا
