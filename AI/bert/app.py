@@ -9,6 +9,8 @@ from dotenv import load_dotenv
 # تحميل المتغيرات البيئية
 load_dotenv()
 
+print("==== Chatbot API IS STARTING ====")
+
 app = FastAPI(title="BERT Model API")
 
 # إعداد CORS
@@ -20,14 +22,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# تحميل النموذج والتوكينايزر
-try:
-    tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-    model = AutoModelForSequenceClassification.from_pretrained("bert-base-uncased", num_labels=2)
-    model.eval()
-except Exception as e:
-    print(f"Error loading model: {e}")
-    raise
+print("==== Loading model... ====")
+# تحميل النموذج
+print("==== Model loaded! ====")
 
 class TextInput(BaseModel):
     text: str
@@ -56,9 +53,11 @@ async def analyze_text(input_data: TextInput):
             "sentiment": "positive" if results[1] > results[0] else "negative"
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"==== ERROR: {e} ====")
+        raise
 
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 8000))
+    print("==== Starting Uvicorn server... ====")
     uvicorn.run(app, host="0.0.0.0", port=port) 
