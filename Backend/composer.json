@@ -16,7 +16,6 @@
         "laravel/framework": "^11.31",
         "laravel/sanctum": "^4.1",
         "laravel/tinker": "^2.9",
-        "spatie/browsershot": "^5.0",
         "symfony/mailer": "^7.0",
         "thiagoalessio/tesseract_ocr": "^2.13"
     },
