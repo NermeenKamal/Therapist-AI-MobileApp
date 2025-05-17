@@ -14,7 +14,7 @@ use Carbon\Carbon;
 
 class ForgotPasswordController extends Controller
 {
-    public function sendResetLink(Request $request)
+    public function sendResetCode(Request $request)
     {
         $request->validate(['email' => 'required|email']);
 
@@ -26,54 +26,52 @@ class ForgotPasswordController extends Controller
             return response()->json(['message' => 'Email not found.'], 404);
         }
 
-        // إنشاء token
-        $token = Str::random(60);
+        // إنشاء كود تحقق من 6 أرقام
+        $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
         
-        // حفظ token في قاعدة البيانات
+        // حفظ الكود في قاعدة البيانات
         DB::table('password_resets')->updateOrInsert(
             ['email' => $request->email],
             [
-                'token' => Hash::make($token),
+                'token' => Hash::make($code),
                 'created_at' => Carbon::now()
             ]
         );
 
         // إرسال البريد
         try {
-            $resetUrl = env('FRONTEND_URL', 'http://localhost:3000') . '/reset-password?token=' . $token . '&email=' . $request->email;
-            
-            Mail::send('emails.reset-password', ['url' => $resetUrl], function($message) use ($request) {
+            Mail::raw("Your password reset code is: " . $code . "\nThis code will expire in 1 hour.", function($message) use ($request) {
                 $message->to($request->email)
-                        ->subject('Reset Password Notification');
+                        ->subject('Password Reset Code');
             });
 
-            return response()->json(['message' => 'Reset link sent to your email.']);
+            return response()->json(['message' => 'Reset code sent to your email.']);
         } catch (\Exception $e) {
-            return response()->json(['message' => 'Could not send reset link.', 'error' => $e->getMessage()], 500);
+            return response()->json(['message' => 'Could not send reset code.', 'error' => $e->getMessage()], 500);
         }
     }
 
     public function reset(Request $request)
     {
         $request->validate([
-            'token' => 'required',
             'email' => 'required|email',
+            'code' => 'required|string|size:6',
             'password' => 'required|confirmed|min:8'
         ]);
 
-        // التحقق من token
+        // التحقق من الكود
         $tokenData = DB::table('password_resets')
             ->where('email', $request->email)
             ->first();
 
-        if (!$tokenData || !Hash::check($request->token, $tokenData->token)) {
-            return response()->json(['message' => 'Invalid token.'], 400);
+        if (!$tokenData || !Hash::check($request->code, $tokenData->token)) {
+            return response()->json(['message' => 'Invalid code.'], 400);
         }
 
-        // التحقق من وقت إنشاء token (صالح لمدة ساعة)
+        // التحقق من وقت إنشاء الكود (صالح لمدة ساعة)
         if (Carbon::parse($tokenData->created_at)->addHour()->isPast()) {
             DB::table('password_resets')->where('email', $request->email)->delete();
-            return response()->json(['message' => 'Token expired.'], 400);
+            return response()->json(['message' => 'Code expired.'], 400);
         }
 
         // تحديث كلمة المرور
@@ -90,7 +88,7 @@ class ForgotPasswordController extends Controller
             return response()->json(['message' => 'Email not found.'], 404);
         }
 
-        // حذف token
+        // حذف الكود
         DB::table('password_resets')->where('email', $request->email)->delete();
 
         return response()->json(['message' => 'Password has been reset successfully.']);
