@@ -25,8 +25,8 @@ print("==== Chatbot API IS STARTING ====")
 # تحميل النموذج والتوكينايزر
 try:
     print("==== Loading model... ====")
-    tokenizer = AutoTokenizer.from_pretrained("microsoft/DialoGPT-medium")
-    model = AutoModelForCausalLM.from_pretrained("microsoft/DialoGPT-medium")
+    tokenizer = AutoTokenizer.from_pretrained("microsoft/DialoGPT-small")
+    model = AutoModelForCausalLM.from_pretrained("microsoft/DialoGPT-small")
     model.eval()
     print("==== Model loaded! ====")
 except Exception as e:
