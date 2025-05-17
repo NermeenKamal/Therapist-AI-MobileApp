@@ -27,6 +27,9 @@ class ImportArticlesJob implements ShouldQueue
      */
     public function handle()
     {
+        // التأكد من وجود المجلدات المطلوبة
+        $this->ensureStorageDirectories();
+
         // التحقق من صحة الصورة الافتراضية
         try {
             $defaultImageResponse = Http::get(self::DEFAULT_IMAGE);
@@ -113,6 +116,8 @@ class ImportArticlesJob implements ShouldQueue
                         // التحقق من وجود الملف بعد الحفظ
                         if (Storage::disk('public')->exists($imagePath)) {
                             Log::info('Image exists after save', ['path' => $imagePath]);
+                            // تحويل المسار إلى URL قابل للوصول
+                            $imagePath = Storage::disk('public')->url($imagePath);
                         } else {
                             Log::error('Image NOT saved', ['path' => $imagePath]);
                             $imagePath = self::DEFAULT_IMAGE;
@@ -160,6 +165,34 @@ class ImportArticlesJob implements ShouldQueue
             $toDelete = $total - 100;
             \App\Models\Article::orderBy('created_at')->limit($toDelete)->delete();
             Log::info('Deleted old articles', ['count' => $toDelete]);
+        }
+    }
+
+    /**
+     * التأكد من وجود المجلدات المطلوبة
+     */
+    private function ensureStorageDirectories()
+    {
+        // التأكد من وجود مجلد storage/app/public
+        if (!Storage::disk('public')->exists('')) {
+            Storage::disk('public')->makeDirectory('');
+        }
+
+        // التأكد من وجود مجلد articles
+        if (!Storage::disk('public')->exists('articles')) {
+            Storage::disk('public')->makeDirectory('articles');
+        }
+
+        // التأكد من وجود الرابط الرمزي
+        if (!file_exists(public_path('storage'))) {
+            try {
+                \Illuminate\Support\Facades\Artisan::call('storage:link');
+                Log::info('Storage link created successfully');
+            } catch (\Exception $e) {
+                Log::error('Failed to create storage link', [
+                    'error' => $e->getMessage()
+                ]);
+            }
         }
     }
 }
