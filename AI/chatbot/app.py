@@ -32,7 +32,7 @@ try:
     print("==== Model loaded! ====")
     print("==== Memory usage (MB):", psutil.virtual_memory().used / 1024 / 1024)
 except Exception as e:
-    print(f"==== ERROR WHILE LOADING MODEL: {e} ====")
+    print(f"==== FATAL ERROR: {e} ====")
     raise
 
 class ChatInput(BaseModel):
