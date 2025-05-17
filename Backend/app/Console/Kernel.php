@@ -19,8 +19,7 @@ class Kernel extends ConsoleKernel
 
     protected function schedule(Schedule $schedule): void
     {
-        // تشغيل استيراد المقالات يومياً في الساعة 12 صباحاً
-        $schedule->command('import:articles')->dailyAt('00:00');
+        $schedule->job(new ImportArticlesJob)->weekly();
     }
 
     protected function commands(): void
