@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  bert:
+    build: ./bert
+    ports:
+      - "8001:8000"
+    environment:
+      - PORT=8000
+    volumes:
+      - ./bert:/app
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  chatbot:
+    build: ./chatbot
+    ports:
+      - "8002:8000"
+    environment:
+      - PORT=8000
+    volumes:
+      - ./chatbot:/app
+    deploy:
+      resources:
+        limits:
+          memory: 2G 
