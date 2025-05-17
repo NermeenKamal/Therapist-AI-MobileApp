@@ -112,3 +112,4 @@ class ImportArticlesJob implements ShouldQueue
         }
     }
 }
+
