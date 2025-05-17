@@ -73,14 +73,23 @@ class ImportArticlesJob implements ShouldQueue
         }
 
         if (count($newArticles) > 0) {
-            Article::truncate();
-            foreach ($newArticles as $article) {
-                Article::create($article);
+            try {
+                Article::truncate();
+                foreach ($newArticles as $article) {
+                    $result = Article::create($article);
+                    Log::info('Article created', ['id' => $result->id, 'title' => $result->title]);
+                }
+                Log::info('Articles imported successfully', ['count' => count($newArticles)]);
+            } catch (\Exception $e) {
+                Log::error('Failed to save articles to database', [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
             }
-            Log::info('Articles imported successfully', ['count' => count($newArticles)]);
         } else {
             Log::warning('No articles were parsed or available.');
         }
+        
 
         $total = Article::count();
         if ($total > 100) {
