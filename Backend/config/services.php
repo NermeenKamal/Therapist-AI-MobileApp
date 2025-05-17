@@ -9,8 +9,8 @@ return [
     ],
 
     'ai' => [
-        'chatbot_endpoint' => env('AI_CHATBOT_ENDPOINT', 'http://localhost:5000/chat'),
-        'bert_endpoint' => env('BERT_SENTIMENT_ENDPOINT', 'http://localhost:5000/bert-sentiment'),
+        'chatbot_endpoint' => env('AI_CHATBOT_ENDPOINT', 'https://cozy-renewal-production.up.railway.app/'),
+        'bert_endpoint' => env('BERT_SENTIMENT_ENDPOINT', 'https://therapist-ai-mobileapp-production.up.railway.app/'),
     ],
 
 ];
