@@ -15,38 +15,20 @@ class AIChatbotService
         $this->aiEndpoint = config('services.ai.chatbot_endpoint');
     }
 
-    public function sendMessage(string $message, string $userId): array
+    public function sendMessage(string $message, ?string $userId = null, array $chatHistory = []): array
     {
-        // Generate a unique conversation ID if not exists
-        $conversationId = Cache::get("user_{$userId}_conversation") ?? Str::uuid()->toString();
-        Cache::put("user_{$userId}_conversation", $conversationId, now()->addHours(24));
-
-        // Store the message in processing state
-        $cacheKey = "chat_{$conversationId}_response";
-        Cache::put($cacheKey, ['status' => 'processing'], now()->addMinutes(5));
-
-        // Send request to AI service asynchronously
-        Http::async()->post($this->aiEndpoint, [
+        $response = Http::post($this->aiEndpoint . '/chat', [
             'message' => $message,
-            'conversation_id' => $conversationId,
-            'user_id' => $userId
-        ])->then(function ($response) use ($cacheKey) {
-            if ($response->successful()) {
-                Cache::put($cacheKey, [
-                    'status' => 'completed',
-                    'response' => $response->json('response'),
-                ], now()->addMinutes(30));
-            } else {
-                Cache::put($cacheKey, [
-                    'status' => 'error',
-                    'message' => 'Failed to process message'
-                ], now()->addMinutes(5));
-            }
-        });
+            'chat_history' => $chatHistory
+        ]);
+
+        if ($response->successful()) {
+            return $response->json();
+        }
 
         return [
-            'conversation_id' => $conversationId,
-            'status' => 'processing'
+            'response' => null,
+            'error' => 'Chatbot model unavailable'
         ];
     }
 
