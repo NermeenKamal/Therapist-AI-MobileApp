@@ -27,144 +27,60 @@ class ImportArticlesJob implements ShouldQueue
      */
     public function handle()
     {
-        // التأكد من وجود المجلدات المطلوبة
         $this->ensureStorageDirectories();
 
-        // التحقق من صحة الصورة الافتراضية
-        try {
-            $defaultImageResponse = Http::get(self::DEFAULT_IMAGE);
-            if ($defaultImageResponse->status() !== 200) {
-                Log::error('Default image is not accessible', [
-                    'url' => self::DEFAULT_IMAGE,
-                    'status' => $defaultImageResponse->status()
-                ]);
-            } else {
-                Log::info('Default image is accessible');
-            }
-        } catch (\Exception $e) {
-            Log::error('Failed to access default image', [
-                'url' => self::DEFAULT_IMAGE,
-                'error' => $e->getMessage()
-            ]);
-        }
-
-        // 1. جلب المقالات وتخزينها مؤقتًا في مصفوفة
         $newArticles = [];
-        $rssFeed = simplexml_load_file('https://news.google.com/rss/search?q=mental+health');
+        $html = file_get_contents('https://www.psychologytoday.com/us/essentials');
+        $dom = new \DOMDocument();
+        @$dom->loadHTML($html);
+        $xpath = new \DOMXPath($dom);
 
-        // جلب صورة الـ feed العامة
-        $channelImage = null;
-        if (isset($rssFeed->channel->image->url)) {
-            $channelImage = (string) $rssFeed->channel->image->url;
-        }
+        foreach ($xpath->query('//article') as $node) {
+            $titleNode = $xpath->query('.//h2', $node)->item(0);
+            $title = $titleNode ? trim($titleNode->textContent) : '';
 
-        $count = 0;
-        foreach ($rssFeed->channel->item as $item) {
-            if ($count >= 100) break; // لا تتعدى 100 مقال
+            $linkNode = $xpath->query('.//a', $node)->item(0);
+            $url = $linkNode ? 'https://www.psychologytoday.com' . $linkNode->getAttribute('href') : '';
 
-            // استخراج رابط الصورة من <image> أو <media:content> أو استخدام صورة افتراضية
-            $imageUrl = null;
-            $namespaces = $item->getNameSpaces(true);
-            if (isset($namespaces['media'])) {
-                $media = $item->children($namespaces['media']);
-                if (isset($media->content)) {
-                    $imageUrl = (string) $media->content->attributes()->url;
-                }
+            $imgNode = $xpath->query('.//img', $node)->item(0);
+            $image = $imgNode ? $imgNode->getAttribute('src') : self::DEFAULT_IMAGE;
+
+            $descNode = $xpath->query('.//p', $node)->item(0);
+            $description = $descNode ? trim($descNode->textContent) : '';
+
+            $authorNode = $xpath->query('.//span[contains(@class,"author")]', $node)->item(0);
+            $author = $authorNode ? trim($authorNode->textContent) : 'Psychology Today';
+
+            $dateNode = $xpath->query('.//span[contains(@class,"date")]', $node)->item(0);
+            $published_at = $dateNode ? trim($dateNode->textContent) : null;
+
+            if ($title && $url) {
+                $newArticles[] = [
+                    'title' => $title,
+                    'description' => $description,
+                    'publisher_name' => $author,
+                    'published_at' => $published_at,
+                    'article_image' => $image,
+                ];
             }
-            if (!$imageUrl && $channelImage) {
-                $imageUrl = $channelImage;
-            }
-            // صورة افتراضية إذا لم توجد صورة في الخبر
-            if (!$imageUrl) {
-                $imageUrl = self::DEFAULT_IMAGE;
-            }
-
-            // تحميل الصورة وتخزينها محليًا
-            $imagePath = null;
-            Log::info('Processing article image', [
-                'article_title' => (string) $item->title,
-                'image_url' => $imageUrl
-            ]);
-
-            try {
-                $response = Http::get($imageUrl);
-                Log::info('Image HTTP status', ['status' => $response->status()]);
-                
-                if ($response->status() !== 200) {
-                    Log::error('Image HTTP error', [
-                        'status' => $response->status(),
-                        'url' => $imageUrl
-                    ]);
-                    $imagePath = self::DEFAULT_IMAGE;
-                } else {
-                    $imageContents = $response->body();
-                    $imagePath = 'articles/' . uniqid() . '.jpg';
-                    
-                    // التأكد من وجود المجلد
-                    if (!Storage::disk('public')->exists('articles')) {
-                        Storage::disk('public')->makeDirectory('articles');
-                    }
-                    
-                    $saved = Storage::disk('public')->put($imagePath, $imageContents);
-                    
-                    if ($saved) {
-                        Log::info('Image saved successfully', [
-                            'path' => $imagePath,
-                            'size' => Storage::disk('public')->size($imagePath)
-                        ]);
-                        
-                        // التحقق من وجود الملف بعد الحفظ
-                        if (Storage::disk('public')->exists($imagePath)) {
-                            Log::info('Image exists after save', ['path' => $imagePath]);
-                            // تحويل المسار إلى URL قابل للوصول
-                            $imagePath = Storage::disk('public')->url($imagePath);
-                        } else {
-                            Log::error('Image NOT saved', ['path' => $imagePath]);
-                            $imagePath = self::DEFAULT_IMAGE;
-                        }
-                    } else {
-                        Log::error('Failed to save image', ['path' => $imagePath]);
-                        $imagePath = self::DEFAULT_IMAGE;
-                    }
-                }
-            } catch (\Exception $e) {
-                $imagePath = self::DEFAULT_IMAGE;
-                Log::error('Image fetch failed', [
-                    'error' => $e->getMessage(),
-                    'url' => $imageUrl
-                ]);
-            }
-
-            $newArticles[] = [
-                'title' => (string) $item->title,
-                'description' => strip_tags((string) $item->description),
-                'publisher_name' => isset($item->source) ? (string) $item->source : 'Google News',
-                'published_at' => new \DateTime((string) $item->pubDate),
-                'article_image' => $imagePath,
-            ];
-
-            $count++;
         }
 
         // 2. إذا نجح جلب عدد كافٍ من المقالات (مثلاً >= 10)
         if (count($newArticles) > 0) {
-            // امسح القديم
             \App\Models\Article::truncate();
-            // أضف الجديد
             foreach ($newArticles as $data) {
                 \App\Models\Article::create($data);
             }
-            Log::info('Articles imported successfully', ['count' => count($newArticles)]);
+            \Log::info('Articles imported successfully', ['count' => count($newArticles)]);
         } else {
-            Log::error('No articles were imported');
+            \Log::error('No articles were imported');
         }
 
-        // 3. لو لأي سبب زاد العدد عن 100 (مثلاً لو أضفت مقالات يدوياً)، احذف الأقدم:
         $total = \App\Models\Article::count();
         if ($total > 100) {
             $toDelete = $total - 100;
             \App\Models\Article::orderBy('created_at')->limit($toDelete)->delete();
-            Log::info('Deleted old articles', ['count' => $toDelete]);
+            \Log::info('Deleted old articles', ['count' => $toDelete]);
         }
     }
 
