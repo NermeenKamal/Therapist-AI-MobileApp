@@ -11,10 +11,17 @@ use App\Models\Article;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use SimpleXMLElement;
+use Carbon\Carbon;
 
 class ImportArticlesJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, SerializesModels;
+
+    // الحد الأقصى لعدد المقالات المحتفظ بها
+    private const MAX_ARTICLES = 100;
+    
+    // الحد الأقصى لعمر المقالات (بالأيام)
+    private const MAX_AGE_DAYS = 30;
 
     private const DEFAULT_IMAGE = 'https://www.nimh.nih.gov/sites/default/files/images/nimh-logo.png';
     
@@ -142,26 +149,45 @@ class ImportArticlesJob implements ShouldQueue
         
         if (count($allArticles) > 0) {
             try {
-                // حذف المقالات القديمة
-                Log::info('Truncating articles table');
-                Article::truncate();
-                Log::info('Articles table truncated successfully');
+                // الحصول على عناوين المقالات الموجودة
+                $existingTitles = Article::pluck('title')->toArray();
                 
-                // إضافة المقالات الجديدة
+                // إضافة المقالات الجديدة فقط
+                $newArticlesCount = 0;
                 foreach ($allArticles as $index => $article) {
-                    try {
-                        $result = Article::create($article);
-                        Log::info('Article created', ['index' => $index, 'id' => $result->id, 'title' => $result->title]);
-                    } catch (\Exception $e) {
-                        Log::error('Failed to create article', [
-                            'index' => $index,
-                            'article' => $article,
-                            'error' => $e->getMessage()
-                        ]);
+                    if (!in_array($article['title'], $existingTitles)) {
+                        try {
+                            $result = Article::create($article);
+                            $newArticlesCount++;
+                            Log::info('New article created', ['index' => $index, 'id' => $result->id, 'title' => $result->title]);
+                        } catch (\Exception $e) {
+                            Log::error('Failed to create article', [
+                                'index' => $index,
+                                'article' => $article,
+                                'error' => $e->getMessage()
+                            ]);
+                        }
                     }
                 }
                 
-                Log::info('Articles import process completed successfully', ['total_articles' => count($allArticles)]);
+                // حذف المقالات القديمة التي تجاوزت الحد الأقصى للعمر
+                $cutoffDate = Carbon::now()->subDays(self::MAX_AGE_DAYS);
+                $oldArticlesCount = Article::where('published_at', '<', $cutoffDate)->delete();
+                Log::info('Old articles deleted', ['count' => $oldArticlesCount, 'cutoff_date' => $cutoffDate->format('Y-m-d')]);
+                
+                // التأكد من عدم تجاوز الحد الأقصى لعدد المقالات
+                $totalArticles = Article::count();
+                if ($totalArticles > self::MAX_ARTICLES) {
+                    $excessCount = $totalArticles - self::MAX_ARTICLES;
+                    Article::orderBy('published_at', 'asc')->limit($excessCount)->delete();
+                    Log::info('Excess articles deleted to maintain limit', ['deleted_count' => $excessCount, 'max_limit' => self::MAX_ARTICLES]);
+                }
+                
+                Log::info('Articles import process completed successfully', [
+                    'new_articles' => $newArticlesCount,
+                    'total_articles' => Article::count(),
+                    'max_limit' => self::MAX_ARTICLES
+                ]);
             } catch (\Exception $e) {
                 Log::error('Failed to save articles to database', [
                     'error' => $e->getMessage(),
@@ -366,7 +392,4 @@ class ImportArticlesJob implements ShouldQueue
             }
         }
         
-        // استخدام اسم المصدر كناشر افتراضي
-        return $defaultPublisher;
-    }
-}
+(Content truncated due to size limit. Use line ranges to read in chunks)
