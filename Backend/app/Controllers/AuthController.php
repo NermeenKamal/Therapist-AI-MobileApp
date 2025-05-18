@@ -74,7 +74,9 @@ class AuthController extends Controller
             'current_medications' => 'string|nullable',
             'allergies' => 'string|nullable',
             'emergency_contact_name' => 'string|nullable',
-            'emergency_contact_number' => 'string|nullable'
+            'emergency_contact_number' => 'string|nullable',
+            'profile_image' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120',
+            'fcm_token' => 'string|nullable'
         ]);
 
         if ($validator->fails()) {
@@ -119,11 +121,11 @@ class AuthController extends Controller
             'mobile_number' => 'required|string',
             'national_id' => 'required|string',
             'national_id_file' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120',
-            'specialization' => 'required|string',
+            'specialization' => 'required|string|in:Behavioral,Mindfulness & Acceptance,Talk Supportive, Relationship & Family, Solution Focused & Goal-Oriented',
             'bio' => 'string|nullable',
             'session_price' => 'numeric|min:0|nullable',
-            'medical_license_path' => 'string|nullable',
-            'profile_image' => 'string|nullable',
+            'medical_license_path' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120',
+            'profile_image' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120',
             'fcm_token' => 'string|nullable'
         ]);
 
