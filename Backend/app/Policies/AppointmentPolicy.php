@@ -11,10 +11,11 @@ use Illuminate\Contracts\Auth\Authenticatable;
 class AppointmentPolicy
 {
     // يسمح للدكتور فقط بإنشاء موعد متاح
-    public function create(Authenticatable $user): bool
+    public function create($user): bool
     {
         return $user->role === 'doctor';
     }
+
 
     // يسمح للمريض أو الدكتور بإلغاء الموعد
     public function cancel(User $user, Appointment $appointment): bool
