@@ -41,7 +41,7 @@ class AppointmentController extends Controller
             'doctor_id' => Auth::id(),
             'appointment_date' => $data['appointment_date'],
             'patient_id' => null,
-            'status' => 'available',
+            'status' => Appointment::STATUS_AVAILABLE,
             'notes' => $data['notes'] ?? null,
             'price' => $data['price'] ?? null,
         ]);
