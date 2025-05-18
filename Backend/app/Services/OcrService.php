@@ -15,24 +15,28 @@ class OcrService
             $path = $image->store('temp', 'public');
             $fullPath = storage_path('app/public/' . $path);
 
-            // استخدام Tesseract مع دعم اللغة العربية
-            $tesseract = new TesseractOCR($fullPath);
-            $tesseract->lang('ara', 'eng'); // دعم العربية والإنجليزية
+            // معالجة الصورة
+            $processedPath = $this->preprocessImage($fullPath);
+
+            // استخدام Tesseract مع دعم اللغة العربية والإنجليزية
+            $tesseract = new TesseractOCR($processedPath);
+            $tesseract->lang('ara', 'eng');
             $ocrText = $tesseract->run();
 
-            // تسجيل النص المستخرج للتأكد من عمله
+            // تسجيل النص المستخرج
             Log::info('OCR Text extracted:', ['text' => $ocrText]);
 
             // تحويل الأرقام العربية إلى إنجليزية
             $normalizedText = $this->convertArabicDigitsToEnglish($ocrText);
             Log::info('Normalized Text:', ['text' => $normalizedText]);
 
-            // استخراج الاسم والرقم القومي من النص
+            // استخراج الاسم والرقم القومي
             $name = $this->extractName($normalizedText);
             $id = $this->extractNationalId($normalizedText);
 
-            // حذف الملف المؤقت
+            // حذف الملفات المؤقتة
             unlink($fullPath);
+            unlink($processedPath);
 
             return [$name, $id];
         } catch (\Exception $e) {
@@ -44,53 +48,6 @@ class OcrService
         }
     }
 
-    public function verifyAgainstDatabase(string $id): string
-    {
-        try {
-            $exists = \App\Models\Doctor::where('national_id', $id)->exists();
-            return $exists ? 'matched' : 'not_matched';
-        } catch (\Exception $e) {
-            Log::error('Database verification failed:', [
-                'error' => $e->getMessage(),
-                'national_id' => $id
-            ]);
-            throw $e;
-        }
-    }
-
-    private function extractName(string $ocrText): string
-    {
-        // تحسين استخراج الاسم من البطاقة المصرية
-        // البحث عن الاسم بعد كلمة "الاسم" أو "Name" أو "اسم"
-        if (preg_match('/(الاسم|Name|اسم)\s*[:]*\s*([^\n]+)/ui', $ocrText, $matches)) {
-            return trim($matches[2]);
-        }
-        return '';
-    }
-
-    private function extractNationalId(string $ocrText): string
-    {
-        // البحث عن الرقم القومي (14 رقم)
-        if (preg_match('/\b\d{14}\b/', $ocrText, $matches)) {
-            return $matches[0];
-        }
-        
-        // طريقة بديلة: استخراج جميع الأرقام وتجميع أي تسلسل من 14 رقم
-        $textDigitsOnly = preg_replace('/[^0-9]/', '', $ocrText);
-        if (preg_match('/\d{14}/', $textDigitsOnly, $matches)) {
-            return $matches[0];
-        }
-        
-        return '';
-    }
-    
-    private function convertArabicDigitsToEnglish($text)
-    {
-        $arabic = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
-        $english = ['0','1','2','3','4','5','6','7','8','9'];
-        return str_replace($arabic, $english, $text);
-    }
-    
     public function verifyNationalId(string $extractedId, string $inputId): bool
     {
         // طريقة 1: البحث العادي
@@ -112,8 +69,58 @@ class OcrService
         $pattern = '/' . $escapedId . '/';
         $isVerifiedByOcr3 = preg_match($pattern, $extractedId) === 1;
         Log::info('Verification Method 3 (Regex):', ['result' => $isVerifiedByOcr3]);
-        
-        // استخدام مزيج من الطرق للتحقق
+
         return $isVerifiedByOcr1 || $isVerifiedByOcr2 || $isVerifiedByOcr3;
+    }
+
+    public function verifyAgainstDatabase(string $id): string
+    {
+        try {
+            $exists = \App\Models\Doctor::where('national_id', $id)->exists();
+            return $exists ? 'matched' : 'not_matched';
+        } catch (\Exception $e) {
+            Log::error('Database verification failed:', [
+                'error' => $e->getMessage(),
+                'national_id' => $id
+            ]);
+            throw $e;
+        }
+    }
+
+    private function extractName(string $ocrText): string
+    {
+        if (preg_match('/(الاسم|Name|اسم)\s*[:]*\s*([^\n]+)/ui', $ocrText, $matches)) {
+            return trim($matches[2]);
+        }
+        return '';
+    }
+
+    private function extractNationalId(string $ocrText): string
+    {
+        if (preg_match('/\b\d{14}\b/', $ocrText, $matches)) {
+            return $matches[0];
+        }
+
+        $textDigitsOnly = preg_replace('/[^0-9]/', '', $ocrText);
+        if (preg_match('/\d{14}/', $textDigitsOnly, $matches)) {
+            return $matches[0];
+        }
+
+        return '';
+    }
+
+    private function convertArabicDigitsToEnglish(string $text): string
+    {
+        $arabic = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+        $english = ['0','1','2','3','4','5','6','7','8','9'];
+        return str_replace($arabic, $english, $text);
+    }
+
+    private function preprocessImage(string $imagePath): string
+    {
+        $processedPath = $imagePath . '_processed.jpg';
+        $command = "convert $imagePath -colorspace Gray -normalize -sharpen 0x1 $processedPath";
+        exec($command);
+        return $processedPath;
     }
 }
