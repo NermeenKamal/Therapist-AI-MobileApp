@@ -152,9 +152,40 @@ class AuthController extends Controller
                     try {
                         $tesseract = new \thiagoalessio\TesseractOCR\TesseractOCR(storage_path('app/public/' . $nationalIdPath));
                         $ocrText = $tesseract->lang('ara')->run();
+                        
+                        // سجل النص الأصلي للمراجعة
+                        Log::info('OCR Raw Text:', ['text' => $ocrText]);
 
                         $normalizedText = $this->convertArabicDigitsToEnglish($ocrText);
-                        $isVerifiedByOcr = str_contains($normalizedText, $request->national_id);
+                        Log::info('Normalized Text:', ['text' => $normalizedText]);
+                        Log::info('National ID Input:', ['id' => $request->national_id]);
+
+                        // طريقة 1: البحث العادي (الأصلية)
+                        $isVerifiedByOcr1 = str_contains($normalizedText, $request->national_id);
+                        Log::info('Verification Method 1 (Original):', ['result' => $isVerifiedByOcr1]);
+
+                        // طريقة 2: استخراج الأرقام فقط من كلا النصين ثم المقارنة
+                        $textDigitsOnly = preg_replace('/[^0-9]/', '', $normalizedText);
+                        $inputDigitsOnly = preg_replace('/[^0-9]/', '', $request->national_id);
+                        $isVerifiedByOcr2 = str_contains($textDigitsOnly, $inputDigitsOnly);
+                        Log::info('Verification Method 2 (Digits Only):', [
+                            'text_digits' => $textDigitsOnly,
+                            'input_digits' => $inputDigitsOnly,
+                            'result' => $isVerifiedByOcr2
+                        ]);
+
+                        // طريقة 3: استخدام تعبير منتظم للمطابقة المرنة
+                        $escapedId = preg_quote($request->national_id, '/');
+                        $pattern = '/' . $escapedId . '/';
+                        $isVerifiedByOcr3 = preg_match($pattern, $normalizedText) === 1;
+                        Log::info('Verification Method 3 (Regex):', ['result' => $isVerifiedByOcr3]);
+                        
+                        // اختيار طريقة التحقق (هنا نستخدم الطريقة الثانية كأكثر مرونة)
+                        $isVerifiedByOcr = $isVerifiedByOcr2;
+                        
+                        // يمكن أيضًا استخدام مزيج من الطرق
+                        // $isVerifiedByOcr = $isVerifiedByOcr1 || $isVerifiedByOcr2 || $isVerifiedByOcr3;
+                        
                     } catch (\Exception $e) {
                         Log::error('OCR verification failed:', [
                             'error' => $e->getMessage(),
@@ -198,7 +229,6 @@ class AuthController extends Controller
             ], 500);
         }
     }
-
 
     public function logout(Request $request): JsonResponse
     {
