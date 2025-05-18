@@ -137,8 +137,8 @@ class AuthController extends Controller
             $isVerifiedByOcr = false;
             $nationalIdPath = null;
 
-            if ($request->hasFile('national_id_file')) {
-                $file = $request->file('national_id_file');
+            if ($request->hasFile('national_id_path')) {
+                $file = $request->file('national_id_path');
                 $nationalIdPath = $file->store('national_ids', 'public');
                 
                 if (in_array($file->getClientOriginalExtension(), ['jpg', 'jpeg', 'png'])) {
@@ -155,7 +155,7 @@ class AuthController extends Controller
                 }
             }
 
-            $data = $request->except('national_id_file');
+            $data = $request->except('national_id_path');
             $data['password'] = Hash::make($request->password);
             $data['national_id_path'] = $nationalIdPath;
             $data['is_verified_by_ocr'] = $isVerifiedByOcr;
