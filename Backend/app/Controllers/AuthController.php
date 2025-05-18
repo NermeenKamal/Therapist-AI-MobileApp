@@ -151,7 +151,7 @@ class AuthController extends Controller
                 if (in_array($file->getClientOriginalExtension(), ['jpg', 'jpeg', 'png'])) {
                     try {
                         $tesseract = new \thiagoalessio\TesseractOCR\TesseractOCR(storage_path('app/public/' . $nationalIdPath));
-                        $ocrText = $tesseract->run();
+                        $ocrText = $tesseract->lang('ara')->run();
 
                         $normalizedText = $this->convertArabicDigitsToEnglish($ocrText);
                         $isVerifiedByOcr = str_contains($normalizedText, $request->national_id);
