@@ -127,7 +127,7 @@ class AuthController extends Controller
             'password' => 'required|string|min:8|confirmed',
             'mobile_number' => 'required|string',
             'national_id' => 'required|string',
-            'national_id_file' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120',
+            'national_id_path' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120',
             'specialization' => 'required|string|in:Behavioral,Mindfulness & Acceptance,Talk Supportive, Relationship & Family, Solution Focused & Goal-Oriented',
             'bio' => 'string|nullable',
             'session_price' => 'numeric|min:0|nullable',
@@ -144,8 +144,8 @@ class AuthController extends Controller
             $isVerifiedByOcr = false;
             $nationalIdPath = null;
 
-            if ($request->hasFile('national_id_file')) {
-                $file = $request->file('national_id_file');
+            if ($request->hasFile('national_id_path')) {
+                $file = $request->file('national_id_path');
                 $nationalIdPath = $file->store('national_ids', 'public');
 
                 if (in_array($file->getClientOriginalExtension(), ['jpg', 'jpeg', 'png'])) {
@@ -164,7 +164,7 @@ class AuthController extends Controller
                 }
             }
 
-            $data = $request->except('national_id_file');
+            $data = $request->except('national_id_path');
             $data['password'] = Hash::make($request->password);
             $data['national_id_path'] = $nationalIdPath;
             $data['is_verified_by_ocr'] = $isVerifiedByOcr;
