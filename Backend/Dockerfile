@@ -1,6 +1,6 @@
 FROM php:8.2-cli
 
-# Install essential packages + chromium + nodejs + npm
+# Install essential packages + chromium + nodejs + npm + tesseract
 RUN apt-get update && apt-get install -y \
     unzip \
     git \
@@ -14,7 +14,10 @@ RUN apt-get update && apt-get install -y \
     libsqlite3-dev \
     chromium \
     nodejs \
-    npm
+    npm \
+    tesseract-ocr \
+    tesseract-ocr-ara \
+    libtesseract-dev
 
 # Install required PHP extensions
 RUN docker-php-ext-install pdo pdo_mysql zip
@@ -22,8 +25,10 @@ RUN docker-php-ext-install pdo pdo_mysql zip
 # Copy composer from official image
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
+# Set working directory
 WORKDIR /var/www
 
+# Copy all project files
 COPY . .
 
 # Install PHP dependencies and make sure browsershot is properly added
@@ -38,9 +43,11 @@ RUN npm install puppeteer
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
     PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
+# Expose port
 EXPOSE 8000
 
 # Set PORT environment variable if not defined
 ENV PORT=8000
 
+# Start Laravel server
 CMD ["sh", "-c", "php artisan serve --host=0.0.0.0 --port=$PORT"]
