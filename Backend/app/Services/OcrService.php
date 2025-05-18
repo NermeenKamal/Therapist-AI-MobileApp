@@ -116,11 +116,20 @@ class OcrService
         return str_replace($arabic, $english, $text);
     }
 
-    private function preprocessImage(string $imagePath): string
+    private function preprocessImage($imagePath)
     {
-        $processedPath = $imagePath . '_processed.jpg';
-        $command = "convert $imagePath -colorspace Gray -normalize -sharpen 0x1 $processedPath";
-        exec($command);
+        $processedPath = '/tmp/processed_' . basename($imagePath);
+
+        // معالجة محسنة: تكبير، تباين، حدة، تحويل لأبيض وأسود
+        $cmd = "convert $imagePath -resize 300% -colorspace Gray -normalize -contrast -sharpen 0x2 -threshold 50% $processedPath";
+        exec($cmd, $output, $returnVar);
+
+        // تحقق من نجاح التحويل
+        if ($returnVar !== 0 || !file_exists($processedPath)) {
+            throw new \Exception("Image preprocessing failed: $cmd");
+        }
+
         return $processedPath;
     }
+
 }
