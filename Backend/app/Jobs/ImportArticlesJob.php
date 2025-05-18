@@ -391,4 +391,3 @@ class ImportArticlesJob implements ShouldQueue
                 return $publisher;
             }
         }
-        
