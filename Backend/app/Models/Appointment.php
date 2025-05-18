@@ -12,6 +12,11 @@ class Appointment extends Model
 {
     use HasFactory;
 
+    public const STATUS_AVAILABLE = 'available';
+    public const STATUS_BOOKED = 'booked';
+    public const STATUS_CANCELED = 'canceled';
+    public const STATUS_PENDING = 'pending';
+
     protected $fillable = [
         'patient_id',
         'doctor_id',
