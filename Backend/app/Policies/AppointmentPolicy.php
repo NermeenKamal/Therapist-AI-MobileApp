@@ -2,29 +2,26 @@
 
 namespace App\Policies;
 
-use App\Models\User;
-use App\Models\Appointment;
 use Illuminate\Contracts\Auth\Authenticatable;
-
-
+use App\Models\Appointment;
 
 class AppointmentPolicy
 {
-    // يسمح للدكتور فقط بإنشاء موعد متاح
-    public function create($user): bool
+    // دكتور فقط يقدر ينشئ مواعيد متاحة
+    public function create(Authenticatable $user): bool
     {
         return $user->role === 'doctor';
     }
 
-
-    // يسمح للمريض أو الدكتور بإلغاء الموعد
-    public function cancel(User $user, Appointment $appointment): bool
+    // المريض أو الدكتور يقدر يلغي
+    public function cancel(Authenticatable $user, Appointment $appointment): bool
     {
-        return $user->id === $appointment->patient_id || $user->id === $appointment->doctor_id;
+        return $user->id === $appointment->patient_id
+            || $user->id === $appointment->doctor_id;
     }
 
-    // مثال تحديث الموعد ( يسمح للدكتور فقط بتحديث الموعد )
-    public function update(User $user, Appointment $appointment): bool
+    // الدكتور فقط يقدر يعدل المواعيد
+    public function update(Authenticatable $user, Appointment $appointment): bool
     {
         return $user->id === $appointment->doctor_id;
     }
