@@ -43,7 +43,12 @@ class AppointmentController extends Controller
             'patient_id' => null,
             'status' => 'available',
             'notes' => $data['notes'] ?? null,
+            'price' => $data['price'] ?? null,
         ]);
+
+        if (!$appointment->id) {
+            return response()->json(['message' => 'Failed to create appointment'], 500);
+        }
 
         return response()->json($appointment, 201);
     }
