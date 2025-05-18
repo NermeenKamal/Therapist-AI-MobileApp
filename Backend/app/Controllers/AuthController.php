@@ -112,6 +112,13 @@ class AuthController extends Controller
         }
     }
 
+    private function convertArabicDigitsToEnglish($text)
+    {
+        $arabic = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+        $english = ['0','1','2','3','4','5','6','7','8','9'];
+        return str_replace($arabic, $english, $text);
+    }
+
     public function registerDoctor(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -120,7 +127,7 @@ class AuthController extends Controller
             'password' => 'required|string|min:8|confirmed',
             'mobile_number' => 'required|string',
             'national_id' => 'required|string',
-            'national_id_path' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120',
+            'national_id_file' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120',
             'specialization' => 'required|string|in:Behavioral,Mindfulness & Acceptance,Talk Supportive, Relationship & Family, Solution Focused & Goal-Oriented',
             'bio' => 'string|nullable',
             'session_price' => 'numeric|min:0|nullable',
@@ -137,15 +144,17 @@ class AuthController extends Controller
             $isVerifiedByOcr = false;
             $nationalIdPath = null;
 
-            if ($request->hasFile('national_id_path')) {
-                $file = $request->file('national_id_path');
+            if ($request->hasFile('national_id_file')) {
+                $file = $request->file('national_id_file');
                 $nationalIdPath = $file->store('national_ids', 'public');
-                
+
                 if (in_array($file->getClientOriginalExtension(), ['jpg', 'jpeg', 'png'])) {
                     try {
                         $tesseract = new \thiagoalessio\TesseractOCR\TesseractOCR(storage_path('app/public/' . $nationalIdPath));
                         $ocrText = $tesseract->run();
-                        $isVerifiedByOcr = str_contains($ocrText, $request->national_id);
+
+                        $normalizedText = $this->convertArabicDigitsToEnglish($ocrText);
+                        $isVerifiedByOcr = str_contains($normalizedText, $request->national_id);
                     } catch (\Exception $e) {
                         Log::error('OCR verification failed:', [
                             'error' => $e->getMessage(),
@@ -155,14 +164,13 @@ class AuthController extends Controller
                 }
             }
 
-            $data = $request->except('national_id_path');
+            $data = $request->except('national_id_file');
             $data['password'] = Hash::make($request->password);
             $data['national_id_path'] = $nationalIdPath;
             $data['is_verified_by_ocr'] = $isVerifiedByOcr;
-            
+
             $doctor = Doctor::create($data);
 
-            // إذا تم التحقق من OCR، نعطي token
             if ($isVerifiedByOcr) {
                 $token = $doctor->createToken('auth_token')->plainTextToken;
                 return response()->json([
@@ -172,7 +180,6 @@ class AuthController extends Controller
                 ], 201);
             }
 
-            // إذا لم يتم التحقق من OCR
             return response()->json([
                 'message' => 'Doctor registration pending OCR verification. Please contact support.',
                 'user' => $doctor,
@@ -191,6 +198,7 @@ class AuthController extends Controller
             ], 500);
         }
     }
+
 
     public function logout(Request $request): JsonResponse
     {
