@@ -197,7 +197,7 @@ class ImportArticlesJob implements ShouldQueue
                 $published   = date('Y-m-d', strtotime((string) $entry->updated));
                 $image       = $this->selectImageForArticle($title);
                 $publisher   = $this->selectPublisherForArticle($title, $sourceName);
-                $articles[]  = compact('title','description','publisher','published','image');
+                $articles[]  = compact('title','description','publisher_name','published_at','article_image');
             } catch (\Exception $e) {
                 Log::error('Atom entry error', ['error' => $e->getMessage()]);
             }
@@ -217,7 +217,7 @@ class ImportArticlesJob implements ShouldQueue
                 $published   = date('Y-m-d', strtotime((string) ($item->pubDate ?? $item->children('dc', true)->date ?? date('Y-m-d'))));
                 $image       = $this->selectImageForArticle($title);
                 $publisher   = $this->selectPublisherForArticle($title, $sourceName);
-                $articles[]  = compact('title','description','publisher','published','image');
+                $articles[]  = compact('title','description','publisher_name','published_at','article_image');
             } catch (\Exception $e) {
                 Log::error('RSS item error', ['error' => $e->getMessage()]);
             }
