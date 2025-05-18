@@ -17,13 +17,10 @@ class ImportArticlesJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, SerializesModels;
 
-    // الحد الأقصى لعدد المقالات المحتفظ بها
     private const MAX_ARTICLES = 100;
-    // الحد الأقصى لعمر المقالات (بالأيام)
     private const MAX_AGE_DAYS = 30;
     private const DEFAULT_IMAGE = 'https://www.nimh.nih.gov/sites/default/files/images/nimh-logo.png';
 
-    // تعريف مصادر RSS المتعددة
     private const RSS_SOURCES = [
         [
             'url'  => 'https://www.nimh.nih.gov/site-info/index-rss.atom',
@@ -52,25 +49,23 @@ class ImportArticlesJob implements ShouldQueue
         ],
     ];
 
-    // تعريف صور متنوعة من Pexels بناءً على الكلمات المفتاحية في العنوان
     private const IMAGE_KEYWORDS = [
-        'brain'        => 'https://images.pexels.com/photos/8378740/pexels-photo-8378740.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
-        'memory'       => 'https://images.pexels.com/photos/4495118/pexels-photo-4495118.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
-        'depression'   => 'https://images.pexels.com/photos/6756091/pexels-photo-6756091.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
-        'suicide'      => 'https://images.pexels.com/photos/6756086/pexels-photo-6756086.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
-        'mental health'=> 'https://images.pexels.com/photos/3958406/pexels-photo-3958406.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
-        'anxiety'      => 'https://images.pexels.com/photos/4101206/pexels-photo-4101206.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
-        'bipolar'      => 'https://images.pexels.com/photos/8412813/pexels-photo-8412813.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
-        'psychosis'    => 'https://images.pexels.com/photos/6764112/pexels-photo-6764112.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
-        'treatment'    => 'https://images.pexels.com/photos/159211/headache-pain-pills-medication-159211.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
-        'research'     => 'https://images.pexels.com/photos/1194775/pexels-photo-1194775.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
-        'therapy'      => 'https://images.pexels.com/photos/5699431/pexels-photo-5699431.jpeg?auto=compress&cs=tinysrgb&w=600',
-        'stress'       => 'https://images.pexels.com/photos/626165/pexels-photo-626165.jpeg?auto=compress&cs=tinysrgb&w=600',
-        'trauma'       => 'https://images.pexels.com/photos/6502500/pexels-photo-6502500.jpeg?auto=compress&cs=tinysrgb&w=600',
-        'addiction'    => 'https://images.pexels.com/photos/47327/medications-money-cure-tablets-47327.jpeg?auto=compress&cs=tinysrgb&w=600',
+        'brain'        => 'https://images.pexels.com/photos/8378740/pexels-photo-8378740.jpeg',
+        'memory'       => 'https://images.pexels.com/photos/4495118/pexels-photo-4495118.jpeg',
+        'depression'   => 'https://images.pexels.com/photos/6756091/pexels-photo-6756091.jpeg',
+        'suicide'      => 'https://images.pexels.com/photos/6756086/pexels-photo-6756086.jpeg',
+        'mental health'=> 'https://images.pexels.com/photos/3958406/pexels-photo-3958406.jpeg',
+        'anxiety'      => 'https://images.pexels.com/photos/4101206/pexels-photo-4101206.jpeg',
+        'bipolar'      => 'https://images.pexels.com/photos/8412813/pexels-photo-8412813.jpeg',
+        'psychosis'    => 'https://images.pexels.com/photos/6764112/pexels-photo-6764112.jpeg',
+        'treatment'    => 'https://images.pexels.com/photos/159211/headache-pain-pills-medication-159211.jpeg',
+        'research'     => 'https://images.pexels.com/photos/1194775/pexels-photo-1194775.jpeg',
+        'therapy'      => 'https://images.pexels.com/photos/5699431/pexels-photo-5699431.jpeg',
+        'stress'       => 'https://images.pexels.com/photos/626165/pexels-photo-626165.jpeg',
+        'trauma'       => 'https://images.pexels.com/photos/6502500/pexels-photo-6502500.jpeg',
+        'addiction'    => 'https://images.pexels.com/photos/47327/medications-money-cure-tablets-47327.jpeg',
     ];
 
-    // تعريف أسماء ناشرين متنوعة حسب التخصص
     private const PUBLISHER_BY_SPECIALTY = [
         'brain'        => 'Neuroscience Research Team',
         'memory'       => 'Cognitive Psychology Experts',
@@ -88,103 +83,73 @@ class ImportArticlesJob implements ShouldQueue
         'addiction'    => 'Addiction Treatment Center',
     ];
 
-    public function __construct()
-    {
-        // Constructor empty
-    }
+    public function __construct() {}
 
     public function handle()
     {
         Log::info('ImportArticlesJob started...');
 
-        // اختبار الاتصال بقاعدة البيانات
         try {
             $testArticle = Article::create([
-                'title'          => 'Test Article ' . date('Y-m-d H:i:s'),
+                'title'          => 'Test Article ' . now(),
                 'description'    => 'This is a test article',
                 'publisher_name' => 'Test',
-                'published_at'   => date('Y-m-d'),
-                'article_image'  => 'https://example.com/test.jpg',
+                'published_at'   => now(),
+                'article_image'  => self::DEFAULT_IMAGE,
             ]);
-            Log::info('Test article created successfully', ['id' => $testArticle->id]);
+            Log::info('Test article created', ['id' => $testArticle->id]);
             $testArticle->delete();
-            Log::info('Test article deleted');
         } catch (\Exception $e) {
-            Log::error('Failed to create test article', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
+            Log::error('DB connection failed', ['error' => $e->getMessage()]);
             return;
         }
 
         $allArticles = [];
         foreach (self::RSS_SOURCES as $source) {
             try {
-                Log::info('Fetching articles from source', ['source' => $source['name'], 'url' => $source['url']]);
                 $articles = $this->fetchArticlesFromSource($source);
                 $allArticles = array_merge($allArticles, $articles);
-                Log::info('Articles fetched successfully', ['source' => $source['name'], 'count' => count($articles)]);
             } catch (\Exception $e) {
-                Log::error('Error fetching articles', ['source' => $source['name'], 'error' => $e->getMessage()]);
+                Log::error('Source error', ['source' => $source['name'], 'error' => $e->getMessage()]);
             }
         }
 
-        usort($allArticles, fn($a, $b) => strtotime($b['published_at']) - strtotime($a['published_at']));
-        Log::info('Total articles fetched', ['count' => count($allArticles)]);
+        usort($allArticles, fn($a, $b) => strtotime($b['published_at']) <=> strtotime($a['published_at']));
 
-        if (count($allArticles) > 0) {
-            try {
-                $existingTitles = Article::pluck('title')->toArray();
-                $newArticlesCount = 0;
-                foreach ($allArticles as $index => $article) {
-                    if (!in_array($article['title'], $existingTitles)) {
-                        try {
-                            $result = Article::create($article);
-                            $newArticlesCount++;
-                            Log::info('New article created', ['index' => $index, 'id' => $result->id, 'title' => $result->title]);
-                        } catch (\Exception $e) {
-                            Log::error('Failed to create article', ['error' => $e->getMessage()]);
-                        }
-                    }
+        try {
+            $existingTitles = Article::pluck('title')->toArray();
+            foreach ($allArticles as $article) {
+                if (!in_array($article['title'], $existingTitles)) {
+                    Article::create($article);
                 }
-                $cutoffDate = Carbon::now()->subDays(self::MAX_AGE_DAYS);
-                $oldArticlesCount = Article::where('published_at', '<', $cutoffDate)->delete();
-                Log::info('Old articles deleted', ['count' => $oldArticlesCount]);
-
-                $totalArticles = Article::count();
-                if ($totalArticles > self::MAX_ARTICLES) {
-                    $excess = $totalArticles - self::MAX_ARTICLES;
-                    Article::orderBy('published_at', 'asc')->limit($excess)->delete();
-                    Log::info('Excess articles removed', ['deleted' => $excess]);
-                }
-                Log::info('Import completed', ['new' => $newArticlesCount, 'total' => Article::count()]);
-            } catch (\Exception $e) {
-                Log::error('Error saving articles to DB', ['error' => $e->getMessage()]);
             }
-        } else {
-            Log::warning('No articles parsed from any source.');
+
+            Article::where('published_at', '<', Carbon::now()->subDays(self::MAX_AGE_DAYS))->delete();
+
+            $totalArticles = Article::count();
+            if ($totalArticles > self::MAX_ARTICLES) {
+                $excess = $totalArticles - self::MAX_ARTICLES;
+                Article::orderBy('published_at')->limit($excess)->delete();
+            }
+        } catch (\Exception $e) {
+            Log::error('DB save error', ['error' => $e->getMessage()]);
         }
     }
 
     private function fetchArticlesFromSource(array $source): array
     {
-        $articles = [];
         try {
-            $client   = new Client();
-            $response = $client->get($source['url'], ['headers' => [ 'User-Agent' => 'Mozilla/5.0'], 'timeout' => 30]);
-            $xml      = $response->getBody()->getContents();
-            $feed     = new SimpleXMLElement($xml);
-            if ($source['type'] === 'atom') {
-                $articles = $this->parseAtomFeed($feed, $source['name']);
-            } else {
-                $articles = $this->parseRssFeed($feed, $source['name']);
-            }
-        } catch (GuzzleException $e) {
-            Log::error('Failed to fetch feed', ['error' => $e->getMessage()]);
-        } catch (\Exception $e) {
-            Log::error('Feed processing error', ['error' => $e->getMessage()]);
+            $client = new Client();
+            $response = $client->get($source['url'], ['headers' => ['User-Agent' => 'Mozilla/5.0'], 'timeout' => 30]);
+            $xml = $response->getBody()->getContents();
+            $feed = new SimpleXMLElement($xml);
+            return $source['type'] === 'atom'
+                ? $this->parseAtomFeed($feed, $source['name'])
+                : $this->parseRssFeed($feed, $source['name']);
+        } catch (GuzzleException | \Exception $e) {
+            Log::error('Feed fetch error', ['error' => $e->getMessage()]);
+            return [];
         }
-        return $articles;
     }
 
     private function parseAtomFeed(SimpleXMLElement $feed, string $sourceName): array
@@ -192,14 +157,14 @@ class ImportArticlesJob implements ShouldQueue
         $articles = [];
         foreach ($feed->entry as $entry) {
             try {
-                $title       = (string) $entry->title;
+                $title = (string) $entry->title;
                 $description = (string) $entry->summary;
-                $published   = date('Y-m-d', strtotime((string) $entry->updated));
-                $image       = $this->selectImageForArticle($title);
-                $publisher   = $this->selectPublisherForArticle($title, $sourceName);
-                $articles[]  = compact('title','description','publisher_name','published_at','article_image');
+                $published_at = date('Y-m-d', strtotime((string) $entry->updated));
+                $article_image = $this->selectImageForArticle($title);
+                $publisher_name = $this->selectPublisherForArticle($title, $sourceName);
+                $articles[] = compact('title', 'description', 'publisher_name', 'published_at', 'article_image');
             } catch (\Exception $e) {
-                Log::error('Atom entry error', ['error' => $e->getMessage()]);
+                Log::error('Atom parse error', ['error' => $e->getMessage()]);
             }
         }
         return $articles;
@@ -208,18 +173,19 @@ class ImportArticlesJob implements ShouldQueue
     private function parseRssFeed(SimpleXMLElement $feed, string $sourceName): array
     {
         $articles = [];
-        $items    = isset($feed->channel) ? $feed->channel->item : $feed->item;
+        $items = isset($feed->channel) ? $feed->channel->item : $feed->item;
         foreach ($items as $item) {
             try {
-                $title       = (string) $item->title;
-                $description = strip_tags((string) ($item->description ?? $item->children('content', true)->encoded ?? ''));
-                if (strlen($description) > 500) $description = substr($description, 0, 497).'...';
-                $published   = date('Y-m-d', strtotime((string) ($item->pubDate ?? $item->children('dc', true)->date ?? date('Y-m-d'))));
-                $image       = $this->selectImageForArticle($title);
-                $publisher   = $this->selectPublisherForArticle($title, $sourceName);
-                $articles[]  = compact('title','description','publisher_name','published_at','article_image');
+                $title = (string) $item->title;
+                $desc = $item->description ?? $item->children('content', true)->encoded ?? '';
+                $description = strip_tags((string) $desc);
+                if (strlen($description) > 500) $description = substr($description, 0, 497) . '...';
+                $published_at = date('Y-m-d', strtotime((string) ($item->pubDate ?? $item->children('dc', true)->date ?? now())));
+                $article_image = $this->selectImageForArticle($title);
+                $publisher_name = $this->selectPublisherForArticle($title, $sourceName);
+                $articles[] = compact('title', 'description', 'publisher_name', 'published_at', 'article_image');
             } catch (\Exception $e) {
-                Log::error('RSS item error', ['error' => $e->getMessage()]);
+                Log::error('RSS parse error', ['error' => $e->getMessage()]);
             }
         }
         return $articles;
@@ -229,9 +195,7 @@ class ImportArticlesJob implements ShouldQueue
     {
         $title = strtolower($title);
         foreach (self::IMAGE_KEYWORDS as $keyword => $url) {
-            if (strpos($title, $keyword) !== false) {
-                return $url;
-            }
+            if (strpos($title, $keyword) !== false) return $url;
         }
         $keys = array_keys(self::IMAGE_KEYWORDS);
         return self::IMAGE_KEYWORDS[$keys[crc32($title) % count($keys)]];
@@ -241,9 +205,7 @@ class ImportArticlesJob implements ShouldQueue
     {
         $title = strtolower($title);
         foreach (self::PUBLISHER_BY_SPECIALTY as $keyword => $publisher) {
-            if (strpos($title, $keyword) !== false) {
-                return $publisher;
-            }
+            if (strpos($title, $keyword) !== false) return $publisher;
         }
         return $defaultPublisher;
     }
