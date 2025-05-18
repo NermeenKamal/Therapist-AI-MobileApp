@@ -115,6 +115,29 @@ class ImportArticlesJob implements ShouldQueue
             }
         }
 
+        // تأكد من أن المقالات لها تواريخ صالحة
+        $validArticles = [];
+        foreach ($allArticles as $article) {
+            try {
+                // تحقق من أن التاريخ صالح وليس في المستقبل
+                $pubDate = Carbon::parse($article['published_at']);
+                if ($pubDate->isPast() || $pubDate->isToday()) {
+                    $validArticles[] = $article;
+                } else {
+                    // إذا كان التاريخ في المستقبل، استخدم تاريخ اليوم بدلاً منه
+                    $article['published_at'] = Carbon::now()->format('Y-m-d');
+                    $validArticles[] = $article;
+                    Log::warning('Future date corrected', ['title' => $article['title'], 'original_date' => $pubDate, 'new_date' => $article['published_at']]);
+                }
+            } catch (\Exception $e) {
+                // إذا كان التاريخ غير صالح، استخدم تاريخ اليوم
+                $article['published_at'] = Carbon::now()->format('Y-m-d');
+                $validArticles[] = $article;
+                Log::warning('Invalid date corrected', ['title' => $article['title'], 'original_date' => $article['published_at'], 'new_date' => Carbon::now()->format('Y-m-d')]);
+            }
+        }
+        
+        $allArticles = $validArticles;
         usort($allArticles, fn($a, $b) => strtotime($b['published_at']) - strtotime($a['published_at']));
         Log::info('Total articles fetched', ['count' => count($allArticles)]);
 
@@ -122,9 +145,11 @@ class ImportArticlesJob implements ShouldQueue
 
         if (count($allArticles) > 0) {
             try {
-                $existingTitles = Article::pluck('title')->toArray();
+                // استخدم حالة عدم التمييز بين الأحرف الكبيرة والصغيرة عند التحقق من العناوين المكررة
+                $existingTitles = array_map('strtolower', Article::pluck('title')->toArray());
+                
                 foreach ($allArticles as $index => $article) {
-                    if (!in_array($article['title'], $existingTitles)) {
+                    if (!in_array(strtolower($article['title']), $existingTitles)) {
                         try {
                             $result = Article::create($article);
                             $newArticlesCount++;
@@ -136,19 +161,53 @@ class ImportArticlesJob implements ShouldQueue
                 }
 
                 if ($newArticlesCount > 0) {
-                    $cutoffDate = Carbon::now()->subDays(self::MAX_AGE_DAYS);
-                    $oldArticlesCount = Article::where('published_at', '<', $cutoffDate)->delete();
-                    Log::info('Old articles deleted', ['count' => $oldArticlesCount]);
+                    // تأكد من أن هناك مقالات كافية قبل حذف المقالات القديمة
+                    $totalBeforeDeletion = Article::count();
+                    
+                    if ($totalBeforeDeletion > self::MAX_ARTICLES) {
+                        $cutoffDate = Carbon::now()->subDays(self::MAX_AGE_DAYS);
+                        $oldArticlesQuery = Article::where('published_at', '<', $cutoffDate);
+                        $oldArticlesCount = $oldArticlesQuery->count();
+                        
+                        // لا تحذف جميع المقالات القديمة إذا كانت ستؤدي إلى وجود عدد قليل جدًا من المقالات
+                        $minArticlesToKeep = self::MAX_ARTICLES * 0.5; // على الأقل نصف الحد الأقصى
+                        
+                        if ($totalBeforeDeletion - $oldArticlesCount >= $minArticlesToKeep) {
+                            $oldArticlesQuery->delete();
+                            Log::info('Old articles deleted', ['count' => $oldArticlesCount]);
+                        } else {
+                            // احذف فقط المقالات الأقدم لتصل إلى العدد المطلوب
+                            $articlesToDelete = $totalBeforeDeletion - $minArticlesToKeep;
+                            if ($articlesToDelete > 0) {
+                                Article::orderBy('published_at', 'asc')->limit($articlesToDelete)->delete();
+                                Log::info('Limited old articles deleted to maintain minimum', ['deleted' => $articlesToDelete, 'remaining' => $minArticlesToKeep]);
+                            }
+                        }
+                    }
 
+                    // تحقق مرة أخرى من العدد الإجمالي بعد حذف المقالات القديمة
                     $totalArticles = Article::count();
                     if ($totalArticles > self::MAX_ARTICLES) {
+                        // لا تحذف جميع المقالات الزائدة إذا كانت ستؤدي إلى وجود عدد قليل جدًا من المقالات
                         $excess = $totalArticles - self::MAX_ARTICLES;
                         Article::orderBy('published_at', 'asc')->limit($excess)->delete();
                         Log::info('Excess articles removed', ['deleted' => $excess]);
                     }
                 }
 
-                Log::info('Import completed', ['new' => $newArticlesCount, 'total' => Article::count()]);
+                // تسجيل معلومات تفصيلية عن حالة المقالات
+                $articlesByDate = Article::selectRaw('DATE(published_at) as date, COUNT(*) as count')
+                    ->groupBy('date')
+                    ->orderBy('date', 'desc')
+                    ->limit(10)
+                    ->get()
+                    ->toArray();
+                
+                Log::info('Import completed', [
+                    'new' => $newArticlesCount, 
+                    'total' => Article::count(),
+                    'recent_dates' => $articlesByDate
+                ]);
             } catch (\Exception $e) {
                 Log::error('Error saving articles to DB', ['error' => $e->getMessage()]);
             }
@@ -162,7 +221,11 @@ class ImportArticlesJob implements ShouldQueue
         $articles = [];
         try {
             $client = new Client();
-            $response = $client->get($source['url'], ['headers' => ['User-Agent' => 'Mozilla/5.0'], 'timeout' => 30]);
+            $response = $client->get($source['url'], [
+                'headers' => ['User-Agent' => 'Mozilla/5.0'], 
+                'timeout' => 30,
+                'verify' => false // تجاوز التحقق من شهادة SSL إذا كانت تسبب مشاكل
+            ]);
             $xml = $response->getBody()->getContents();
             $feed = new SimpleXMLElement($xml);
             if ($source['type'] === 'atom') {
@@ -185,7 +248,25 @@ class ImportArticlesJob implements ShouldQueue
             try {
                 $title = (string) $entry->title;
                 $description = (string) $entry->summary;
-                $published_at = date('Y-m-d', strtotime((string) $entry->updated));
+                
+                // معالجة التاريخ بشكل أكثر قوة
+                $published_at = null;
+                try {
+                    if (!empty($entry->updated)) {
+                        $published_at = date('Y-m-d', strtotime((string) $entry->updated));
+                    } elseif (!empty($entry->published)) {
+                        $published_at = date('Y-m-d', strtotime((string) $entry->published));
+                    }
+                } catch (\Exception $e) {
+                    // في حالة فشل تحليل التاريخ
+                    Log::warning('Date parsing failed', ['entry_title' => $title]);
+                }
+                
+                // إذا كان التاريخ غير صالح، استخدم تاريخ اليوم
+                if (empty($published_at) || !strtotime($published_at)) {
+                    $published_at = date('Y-m-d');
+                }
+                
                 $article_image = $this->selectImageForArticle($title);
                 $publisher_name = $this->selectPublisherForArticle($title, $sourceName);
                 $articles[] = compact('title', 'description', 'publisher_name', 'published_at', 'article_image');
@@ -199,13 +280,48 @@ class ImportArticlesJob implements ShouldQueue
     private function parseRssFeed(SimpleXMLElement $feed, string $sourceName): array
     {
         $articles = [];
+        // تعامل مع مختلف تنسيقات RSS
         $items = isset($feed->channel) ? $feed->channel->item : $feed->item;
+        
+        if (empty($items)) {
+            Log::warning('No items found in RSS feed', ['source' => $sourceName]);
+            return $articles;
+        }
+        
         foreach ($items as $item) {
             try {
                 $title = (string) $item->title;
-                $description = strip_tags((string) ($item->description ?? $item->children('content', true)->encoded ?? ''));
-                if (strlen($description) > 500) $description = substr($description, 0, 497) . '...';
-                $published_at = date('Y-m-d', strtotime((string) ($item->pubDate ?? $item->children('dc', true)->date ?? date('Y-m-d'))));
+                
+                // التعامل مع مختلف أنواع الوصف
+                $description = '';
+                if (isset($item->description)) {
+                    $description = (string) $item->description;
+                } elseif (isset($item->children('content', true)->encoded)) {
+                    $description = (string) $item->children('content', true)->encoded;
+                }
+                $description = strip_tags($description);
+                if (strlen($description) > 500) {
+                    $description = substr($description, 0, 497) . '...';
+                }
+                
+                // معالجة التاريخ بشكل أكثر قوة
+                $published_at = null;
+                try {
+                    if (!empty($item->pubDate)) {
+                        $published_at = date('Y-m-d', strtotime((string) $item->pubDate));
+                    } elseif (!empty($item->children('dc', true)->date)) {
+                        $published_at = date('Y-m-d', strtotime((string) $item->children('dc', true)->date));
+                    }
+                } catch (\Exception $e) {
+                    // في حالة فشل تحليل التاريخ
+                    Log::warning('Date parsing failed', ['item_title' => $title]);
+                }
+                
+                // إذا كان التاريخ غير صالح، استخدم تاريخ اليوم
+                if (empty($published_at) || !strtotime($published_at)) {
+                    $published_at = date('Y-m-d');
+                }
+                
                 $article_image = $this->selectImageForArticle($title);
                 $publisher_name = $this->selectPublisherForArticle($title, $sourceName);
                 $articles[] = compact('title', 'description', 'publisher_name', 'published_at', 'article_image');
