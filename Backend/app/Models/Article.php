@@ -12,6 +12,7 @@ class Article extends Model
         'publisher_name',
         'published_at',
         'article_image',
+        'resource'
     ];
 
     protected $casts = [
