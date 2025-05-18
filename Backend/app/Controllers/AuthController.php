@@ -147,44 +147,36 @@ class AuthController extends Controller
             if ($request->hasFile('national_id_path')) {
                 $file = $request->file('national_id_path');
                 $nationalIdPath = $file->store('national_ids', 'public');
-
+            
                 if (in_array($file->getClientOriginalExtension(), ['jpg', 'jpeg', 'png'])) {
                     try {
-                        $tesseract = new \thiagoalessio\TesseractOCR\TesseractOCR(storage_path('app/public/' . $nationalIdPath));
-                        $ocrText = $tesseract->lang('ara')->run();
+                        // استخدام OcrService المحسن
+                        $ocrService = new \App\Services\OcrService();
+                        list($extractedName, $extractedId) = $ocrService->extractIdData($file);
                         
-                        // سجل النص الأصلي للمراجعة
-                        Log::info('OCR Raw Text:', ['text' => $ocrText]);
-
-                        $normalizedText = $this->convertArabicDigitsToEnglish($ocrText);
-                        Log::info('Normalized Text:', ['text' => $normalizedText]);
-                        Log::info('National ID Input:', ['id' => $request->national_id]);
-
-                        // طريقة 1: البحث العادي (الأصلية)
-                        $isVerifiedByOcr1 = str_contains($normalizedText, $request->national_id);
-                        Log::info('Verification Method 1 (Original):', ['result' => $isVerifiedByOcr1]);
-
-                        // طريقة 2: استخراج الأرقام فقط من كلا النصين ثم المقارنة
-                        $textDigitsOnly = preg_replace('/[^0-9]/', '', $normalizedText);
-                        $inputDigitsOnly = preg_replace('/[^0-9]/', '', $request->national_id);
-                        $isVerifiedByOcr2 = str_contains($textDigitsOnly, $inputDigitsOnly);
-                        Log::info('Verification Method 2 (Digits Only):', [
-                            'text_digits' => $textDigitsOnly,
-                            'input_digits' => $inputDigitsOnly,
-                            'result' => $isVerifiedByOcr2
+                        // تسجيل البيانات المستخرجة
+                        Log::info('OCR Extracted Data:', [
+                            'name' => $extractedName,
+                            'id' => $extractedId,
+                            'input_id' => $request->national_id
                         ]);
-
-                        // طريقة 3: استخدام تعبير منتظم للمطابقة المرنة
-                        $escapedId = preg_quote($request->national_id, '/');
-                        $pattern = '/' . $escapedId . '/';
-                        $isVerifiedByOcr3 = preg_match($pattern, $normalizedText) === 1;
-                        Log::info('Verification Method 3 (Regex):', ['result' => $isVerifiedByOcr3]);
                         
-                        // اختيار طريقة التحقق (هنا نستخدم الطريقة الثانية كأكثر مرونة)
-                        $isVerifiedByOcr = $isVerifiedByOcr2;
+                        // التحقق من الرقم القومي
+                        $isVerifiedByOcr = $ocrService->verifyNationalId($extractedId, $request->national_id);
                         
-                        // يمكن أيضًا استخدام مزيج من الطرق
-                        // $isVerifiedByOcr = $isVerifiedByOcr1 || $isVerifiedByOcr2 || $isVerifiedByOcr3;
+                        // يمكن أيضًا التحقق من الاسم إذا كان متاحًا
+                        if (!empty($extractedName) && !empty($request->name)) {
+                            $nameVerified = similar_text($extractedName, $request->name) > 50; // نسبة تشابه أكثر من 50%
+                            Log::info('Name Verification:', [
+                                'extracted_name' => $extractedName,
+                                'input_name' => $request->name,
+                                'similarity' => similar_text($extractedName, $request->name),
+                                'result' => $nameVerified
+                            ]);
+                            
+                            // يمكن دمج نتيجة التحقق من الاسم مع نتيجة التحقق من الرقم القومي
+                            // $isVerifiedByOcr = $isVerifiedByOcr && $nameVerified;
+                        }
                         
                     } catch (\Exception $e) {
                         Log::error('OCR verification failed:', [
