@@ -56,20 +56,20 @@ class ImportArticlesJob implements ShouldQueue
 
     // تعريف صور متنوعة من Pexels بناءً على الكلمات المفتاحية في العنوان
     private const IMAGE_KEYWORDS = [
-        'brain' => 'https://www.pexels.com/photo/an-illustration-of-a-person-s-mind-8378740/',
-        'memory' => 'https://www.pexels.com/photo/woman-wearing-a-face-mask-4495118/',
-        'depression' => 'https://www.pexels.com/photo/person-hands-woman-hand-6756091/',
-        'suicide' => 'https://www.pexels.com/photo/light-arm-hands-people-6756086/',
-        'mental health' => 'https://www.pexels.com/photo/the-words-mental-health-on-laptop-screen-3958406/',
-        'anxiety' => 'https://www.pexels.com/photo/woman-in-blue-long-sleeve-shirt-holding-pen-4101206/',
-        'bipolar' => 'https://www.pexels.com/photo/person-in-black-and-green-blazer-8412813/',
-        'psychosis' => 'https://www.pexels.com/photo/woman-in-white-shirt-wearing-eyeglasses-6764112/',
-        'treatment' => 'https://www.pexels.com/photo/close-up-photo-of-medicinal-drugs-159211/',
-        'research' => 'https://www.pexels.com/photo/selective-focus-photo-of-magnifying-glass-1194775/',
-        'therapy' => 'https://www.verywellmind.com/thmb/SPZXQKZFxHkgW79E8AXcPDfPrD8=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/GettyImages-1181816240-e5bb3e3ed9d74f05be0f1e8e3ce475ad.jpg',
-        'stress' => 'https://www.verywellmind.com/thmb/QcQJGmGXrE8Xz0qEd0JMvQdGUHA=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/GettyImages-1127069581-dba3a8b7b5d44d36b91fc762a222f8c5.jpg',
-        'trauma' => 'https://psychcentral.com/images/MH/trauma-ptsd.jpg',
-        'addiction' => 'https://www.verywellmind.com/thmb/9-nhVYPDD5QrXZXLdJQFYzd3AAc=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/addiction-56a6f2f75f9b58b7d0e56185.jpg'
+        'brain' => 'https://images.pexels.com/photos/8378740/pexels-photo-8378740.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
+        'memory' => 'https://images.pexels.com/photos/4495118/pexels-photo-4495118.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
+        'depression' => 'https://images.pexels.com/photos/6756091/pexels-photo-6756091.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
+        'suicide' => 'https://images.pexels.com/photos/6756086/pexels-photo-6756086.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
+        'mental health' => 'https://images.pexels.com/photos/3958406/pexels-photo-3958406.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
+        'anxiety' => 'https://images.pexels.com/photos/4101206/pexels-photo-4101206.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
+        'bipolar' => 'https://images.pexels.com/photos/8412813/pexels-photo-8412813.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
+        'psychosis' => 'https://images.pexels.com/photos/6764112/pexels-photo-6764112.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
+        'treatment' => 'https://images.pexels.com/photos/159211/headache-pain-pills-medication-159211.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
+        'research' => 'https://images.pexels.com/photos/1194775/pexels-photo-1194775.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
+        'therapy' => 'https://images.pexels.com/photos/5699431/pexels-photo-5699431.jpeg?auto=compress&cs=tinysrgb&w=600',
+        'stress' => 'https://images.pexels.com/photos/626165/pexels-photo-626165.jpeg?auto=compress&cs=tinysrgb&w=600',
+        'trauma' => 'https://images.pexels.com/photos/6502500/pexels-photo-6502500.jpeg?auto=compress&cs=tinysrgb&w=600',
+        'addiction' => 'https://images.pexels.com/photos/47327/medications-money-cure-tablets-47327.jpeg?auto=compress&cs=tinysrgb&w=600'
     ];
 
     // تعريف أسماء ناشرين متنوعة حسب التخصص
