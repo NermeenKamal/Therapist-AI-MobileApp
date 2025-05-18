@@ -22,11 +22,31 @@ class ImportArticlesJob implements ShouldQueue
     private const DEFAULT_IMAGE = 'https://www.nimh.nih.gov/sites/default/files/images/nimh-logo.png';
 
     private const RSS_SOURCES = [
-        ['url' => 'https://www.nimh.nih.gov/site-info/index-rss.atom', 'type' => 'atom', 'name' => 'National Institute of Mental Health'],
-        ['url' => 'https://www.psychologytoday.com/us/blog/feed', 'type' => 'rss', 'name' => 'Psychology Today'],
-        ['url' => 'https://www.medicalnewstoday.com/category/mental-health/feed', 'type' => 'rss', 'name' => 'Medical News Today'],
-        ['url' => 'https://www.verywellmind.com/rss', 'type' => 'rss', 'name' => 'Verywell Mind'],
-        ['url' => 'https://psychcentral.com/feed', 'type' => 'rss', 'name' => 'PsychCentral'],
+        [
+            'url'  => 'https://www.nimh.nih.gov/site-info/index-rss.atom',
+            'type' => 'atom',
+            'name' => 'National Institute of Mental Health',
+        ],
+        [
+            'url'  => 'https://www.psychologytoday.com/us/blog/feed',
+            'type' => 'rss',
+            'name' => 'Psychology Today',
+        ],
+        [
+            'url'  => 'https://www.medicalnewstoday.com/category/mental-health/feed',
+            'type' => 'rss',
+            'name' => 'Medical News Today',
+        ],
+        [
+            'url'  => 'https://www.verywellmind.com/rss',
+            'type' => 'rss',
+            'name' => 'Verywell Mind',
+        ],
+        [
+            'url'  => 'https://psychcentral.com/feed',
+            'type' => 'rss',
+            'name' => 'PsychCentral',
+        ],
     ];
 
     private const IMAGE_KEYWORDS = [
@@ -63,97 +83,104 @@ class ImportArticlesJob implements ShouldQueue
         'addiction' => 'Addiction Treatment Center',
     ];
 
-    public function __construct() {}
-
     public function handle()
     {
         Log::info('ImportArticlesJob started...');
 
         try {
             $testArticle = Article::create([
-                'title' => 'Test Article ' . now(),
+                'title' => 'Test Article ' . date('Y-m-d H:i:s'),
                 'description' => 'This is a test article',
                 'publisher_name' => 'Test',
-                'published_at' => now(),
+                'published_at' => date('Y-m-d'),
                 'article_image' => 'https://example.com/test.jpg',
             ]);
             Log::info('Test article created successfully', ['id' => $testArticle->id]);
             $testArticle->delete();
+            Log::info('Test article deleted');
         } catch (\Exception $e) {
-            Log::error('Database write test failed', ['error' => $e->getMessage()]);
+            Log::error('Failed to create test article', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
             return;
         }
 
         $allArticles = [];
-
         foreach (self::RSS_SOURCES as $source) {
             try {
+                Log::info('Fetching articles from source', ['source' => $source['name'], 'url' => $source['url']]);
                 $articles = $this->fetchArticlesFromSource($source);
                 $allArticles = array_merge($allArticles, $articles);
-                Log::info('Fetched from source', ['source' => $source['name'], 'count' => count($articles)]);
+                Log::info('Articles fetched successfully', ['source' => $source['name'], 'count' => count($articles)]);
             } catch (\Exception $e) {
-                Log::error('Fetch error', ['source' => $source['name'], 'error' => $e->getMessage()]);
+                Log::error('Error fetching articles', ['source' => $source['name'], 'error' => $e->getMessage()]);
             }
         }
 
-        usort($allArticles, fn($a, $b) => strtotime($b['published_at']) <=> strtotime($a['published_at']));
-        Log::info('Total fetched articles', ['count' => count($allArticles)]);
+        usort($allArticles, fn($a, $b) => strtotime($b['published_at']) - strtotime($a['published_at']));
+        Log::info('Total articles fetched', ['count' => count($allArticles)]);
+
+        $newArticlesCount = 0;
 
         if (count($allArticles) > 0) {
-            $existingTitles = Article::pluck('title')->toArray();
-            $newArticlesCount = 0;
-
-            foreach ($allArticles as $article) {
-                if (!in_array($article['title'], $existingTitles)) {
-                    try {
-                        Article::create($article);
-                        $newArticlesCount++;
-                    } catch (\Exception $e) {
-                        Log::error('Insert failed', ['title' => $article['title'], 'error' => $e->getMessage()]);
+            try {
+                $existingTitles = Article::pluck('title')->toArray();
+                foreach ($allArticles as $index => $article) {
+                    if (!in_array($article['title'], $existingTitles)) {
+                        try {
+                            $result = Article::create($article);
+                            $newArticlesCount++;
+                            Log::info('New article created', ['index' => $index, 'id' => $result->id, 'title' => $result->title]);
+                        } catch (\Exception $e) {
+                            Log::error('Failed to create article', ['error' => $e->getMessage()]);
+                        }
                     }
                 }
-            }
 
-            if ($newArticlesCount > 0) {
-                $cutoff = Carbon::now()->subDays(self::MAX_AGE_DAYS);
-                $oldDeleted = Article::where('published_at', '<', $cutoff)->delete();
-                Log::info('Old articles deleted', ['count' => $oldDeleted]);
+                if ($newArticlesCount > 0) {
+                    $cutoffDate = Carbon::now()->subDays(self::MAX_AGE_DAYS);
+                    $oldArticlesCount = Article::where('published_at', '<', $cutoffDate)->delete();
+                    Log::info('Old articles deleted', ['count' => $oldArticlesCount]);
 
-                $total = Article::count();
-                if ($total > self::MAX_ARTICLES) {
-                    $excess = $total - self::MAX_ARTICLES;
-                    Article::orderBy('published_at')->limit($excess)->delete();
-                    Log::info('Excess articles deleted', ['count' => $excess]);
+                    $totalArticles = Article::count();
+                    if ($totalArticles > self::MAX_ARTICLES) {
+                        $excess = $totalArticles - self::MAX_ARTICLES;
+                        Article::orderBy('published_at', 'asc')->limit($excess)->delete();
+                        Log::info('Excess articles removed', ['deleted' => $excess]);
+                    }
                 }
-            }
 
-            Log::info('Import completed', ['new' => $newArticlesCount, 'total' => Article::count()]);
+                Log::info('Import completed', ['new' => $newArticlesCount, 'total' => Article::count()]);
+            } catch (\Exception $e) {
+                Log::error('Error saving articles to DB', ['error' => $e->getMessage()]);
+            }
         } else {
-            Log::warning('No articles fetched');
+            Log::warning('No articles parsed from any source.');
         }
     }
 
     private function fetchArticlesFromSource(array $source): array
     {
+        $articles = [];
         try {
-            $client = new Client(['timeout' => 30]);
-            $response = $client->get($source['url'], ['headers' => ['User-Agent' => 'Mozilla/5.0']]);
-            $feed = new SimpleXMLElement($response->getBody()->getContents());
-
-            return $source['type'] === 'atom'
-                ? $this->parseAtomFeed($feed, $source['name'])
-                : $this->parseRssFeed($feed, $source['name']);
-
+            $client = new Client();
+            $response = $client->get($source['url'], ['headers' => ['User-Agent' => 'Mozilla/5.0'], 'timeout' => 30]);
+            $xml = $response->getBody()->getContents();
+            $feed = new SimpleXMLElement($xml);
+            if ($source['type'] === 'atom') {
+                $articles = $this->parseAtomFeed($feed, $source['name']);
+            } else {
+                $articles = $this->parseRssFeed($feed, $source['name']);
+            }
+        } catch (GuzzleException $e) {
+            Log::error('Failed to fetch feed', ['error' => $e->getMessage()]);
         } catch (\Exception $e) {
-            Log::error('Fetch failed', ['url' => $source['url'], 'error' => $e->getMessage()]);
-            return [];
+            Log::error('Feed processing error', ['error' => $e->getMessage()]);
         }
+        return $articles;
     }
 
     private function parseAtomFeed(SimpleXMLElement $feed, string $sourceName): array
     {
         $articles = [];
-
         foreach ($feed->entry as $entry) {
             try {
                 $title = (string) $entry->title;
@@ -161,37 +188,31 @@ class ImportArticlesJob implements ShouldQueue
                 $published_at = date('Y-m-d', strtotime((string) $entry->updated));
                 $article_image = $this->selectImageForArticle($title);
                 $publisher_name = $this->selectPublisherForArticle($title, $sourceName);
-
                 $articles[] = compact('title', 'description', 'publisher_name', 'published_at', 'article_image');
             } catch (\Exception $e) {
-                Log::error('Atom parse error', ['error' => $e->getMessage()]);
+                Log::error('Atom entry error', ['error' => $e->getMessage()]);
             }
         }
-
         return $articles;
     }
 
     private function parseRssFeed(SimpleXMLElement $feed, string $sourceName): array
     {
         $articles = [];
-        $items = $feed->channel->item ?? $feed->item;
-
+        $items = isset($feed->channel) ? $feed->channel->item : $feed->item;
         foreach ($items as $item) {
             try {
                 $title = (string) $item->title;
-                $desc = $item->description ?? $item->children('content', true)->encoded ?? '';
-                $description = strip_tags($desc);
+                $description = strip_tags((string) ($item->description ?? $item->children('content', true)->encoded ?? ''));
                 if (strlen($description) > 500) $description = substr($description, 0, 497) . '...';
-                $published_at = date('Y-m-d', strtotime((string) ($item->pubDate ?? $item->children('dc', true)->date ?? now())));
+                $published_at = date('Y-m-d', strtotime((string) ($item->pubDate ?? $item->children('dc', true)->date ?? date('Y-m-d'))));
                 $article_image = $this->selectImageForArticle($title);
                 $publisher_name = $this->selectPublisherForArticle($title, $sourceName);
-
                 $articles[] = compact('title', 'description', 'publisher_name', 'published_at', 'article_image');
             } catch (\Exception $e) {
-                Log::error('RSS parse error', ['error' => $e->getMessage()]);
+                Log::error('RSS item error', ['error' => $e->getMessage()]);
             }
         }
-
         return $articles;
     }
 
@@ -203,7 +224,6 @@ class ImportArticlesJob implements ShouldQueue
                 return $url;
             }
         }
-
         $keys = array_keys(self::IMAGE_KEYWORDS);
         return self::IMAGE_KEYWORDS[$keys[crc32($title) % count($keys)]];
     }
@@ -216,7 +236,6 @@ class ImportArticlesJob implements ShouldQueue
                 return $publisher;
             }
         }
-
         return $defaultPublisher;
     }
 }
