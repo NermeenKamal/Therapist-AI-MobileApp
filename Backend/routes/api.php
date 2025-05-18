@@ -28,11 +28,13 @@ Route::post('auth/logout', [AuthController::class, 'logout'])->middleware('auth:
 Route::middleware('auth:sanctum')->group(function () {
     // Appointment routes
     Route::get('appointments', [AppointmentController::class, 'index']);
-    Route::post('appointments', [AppointmentController::class, 'store']);
     Route::post('appointments/{id}/cancel', [AppointmentController::class, 'cancel']);
     Route::get('specializations', [AppointmentController::class, 'specializations']);
     Route::get('doctors/{specialization}', [AppointmentController::class, 'doctorsBySpecialization']);
     Route::put('/appointments/{id}', [AppointmentController::class, 'update']);
+    Route::post('/appointments/available', [AppointmentController::class, 'createAvailableAppointment']);
+    Route::post('/appointments/book/{id}', [AppointmentController::class, 'bookAvailableAppointment']);
+    Route::get('/appointments/doctor/{doctorId}/available', [AppointmentController::class, 'availableForDoctor']);
 
     // Chat
     Route::post('chat/send', [ChatController::class, 'sendMessage']);
