@@ -120,7 +120,7 @@ class AuthController extends Controller
             'password' => 'required|string|min:8|confirmed',
             'mobile_number' => 'required|string',
             'national_id' => 'required|string',
-            'national_id_file' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120',
+            'national_id_path' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120',
             'specialization' => 'required|string|in:Behavioral,Mindfulness & Acceptance,Talk Supportive, Relationship & Family, Solution Focused & Goal-Oriented',
             'bio' => 'string|nullable',
             'session_price' => 'numeric|min:0|nullable',
