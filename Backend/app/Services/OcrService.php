@@ -15,17 +15,21 @@ class OcrService
             $path = $image->store('temp', 'public');
             $fullPath = storage_path('app/public/' . $path);
 
-            // استخدام Tesseract مع دعم اللغة الإنجليزية فقط
+            // استخدام Tesseract مع دعم اللغة العربية
             $tesseract = new TesseractOCR($fullPath);
-            $tesseract->lang('eng'); // تحديد اللغة الإنجليزية فقط
+            $tesseract->lang('ara', 'eng'); // دعم العربية والإنجليزية
             $ocrText = $tesseract->run();
 
             // تسجيل النص المستخرج للتأكد من عمله
             Log::info('OCR Text extracted:', ['text' => $ocrText]);
 
+            // تحويل الأرقام العربية إلى إنجليزية
+            $normalizedText = $this->convertArabicDigitsToEnglish($ocrText);
+            Log::info('Normalized Text:', ['text' => $normalizedText]);
+
             // استخراج الاسم والرقم القومي من النص
-            $name = $this->extractName($ocrText);
-            $id = $this->extractNationalId($ocrText);
+            $name = $this->extractName($normalizedText);
+            $id = $this->extractNationalId($normalizedText);
 
             // حذف الملف المؤقت
             unlink($fullPath);
@@ -56,9 +60,10 @@ class OcrService
 
     private function extractName(string $ocrText): string
     {
-       
-        if (preg_match('/الاسم\s*:\s*([^\n]+)/u', $ocrText, $matches)) {
-            return trim($matches[1]);
+        // تحسين استخراج الاسم من البطاقة المصرية
+        // البحث عن الاسم بعد كلمة "الاسم" أو "Name" أو "اسم"
+        if (preg_match('/(الاسم|Name|اسم)\s*[:]*\s*([^\n]+)/ui', $ocrText, $matches)) {
+            return trim($matches[2]);
         }
         return '';
     }
@@ -69,6 +74,46 @@ class OcrService
         if (preg_match('/\b\d{14}\b/', $ocrText, $matches)) {
             return $matches[0];
         }
+        
+        // طريقة بديلة: استخراج جميع الأرقام وتجميع أي تسلسل من 14 رقم
+        $textDigitsOnly = preg_replace('/[^0-9]/', '', $ocrText);
+        if (preg_match('/\d{14}/', $textDigitsOnly, $matches)) {
+            return $matches[0];
+        }
+        
         return '';
+    }
+    
+    private function convertArabicDigitsToEnglish($text)
+    {
+        $arabic = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+        $english = ['0','1','2','3','4','5','6','7','8','9'];
+        return str_replace($arabic, $english, $text);
+    }
+    
+    public function verifyNationalId(string $extractedId, string $inputId): bool
+    {
+        // طريقة 1: البحث العادي
+        $isVerifiedByOcr1 = str_contains($extractedId, $inputId);
+        Log::info('Verification Method 1 (Original):', ['result' => $isVerifiedByOcr1]);
+
+        // طريقة 2: استخراج الأرقام فقط من كلا النصين ثم المقارنة
+        $extractedDigitsOnly = preg_replace('/[^0-9]/', '', $extractedId);
+        $inputDigitsOnly = preg_replace('/[^0-9]/', '', $inputId);
+        $isVerifiedByOcr2 = str_contains($extractedDigitsOnly, $inputDigitsOnly);
+        Log::info('Verification Method 2 (Digits Only):', [
+            'extracted_digits' => $extractedDigitsOnly,
+            'input_digits' => $inputDigitsOnly,
+            'result' => $isVerifiedByOcr2
+        ]);
+
+        // طريقة 3: استخدام تعبير منتظم للمطابقة المرنة
+        $escapedId = preg_quote($inputId, '/');
+        $pattern = '/' . $escapedId . '/';
+        $isVerifiedByOcr3 = preg_match($pattern, $extractedId) === 1;
+        Log::info('Verification Method 3 (Regex):', ['result' => $isVerifiedByOcr3]);
+        
+        // استخدام مزيج من الطرق للتحقق
+        return $isVerifiedByOcr1 || $isVerifiedByOcr2 || $isVerifiedByOcr3;
     }
 }
