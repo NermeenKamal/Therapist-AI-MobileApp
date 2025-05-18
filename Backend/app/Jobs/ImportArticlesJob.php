@@ -85,7 +85,10 @@ class ImportArticlesJob implements ShouldQueue
 
     public function handle()
     {
-        Log::info('ImportArticlesJob started...');
+        Log::info('ImportArticlesJob started...', ['version' => 'with_resource']);
+
+        // تسجيل عدد المقالات في بداية العملية
+        Log::info('Initial articles count', ['count' => Article::count()]);
 
         try {
             $testArticle = Article::create([
@@ -94,6 +97,7 @@ class ImportArticlesJob implements ShouldQueue
                 'publisher_name' => 'Test',
                 'published_at' => date('Y-m-d'),
                 'article_image' => 'https://example.com/test.jpg',
+                'resource' => 'https://example.com/test-article',
             ]);
             Log::info('Test article created successfully', ['id' => $testArticle->id]);
             $testArticle->delete();
@@ -153,12 +157,20 @@ class ImportArticlesJob implements ShouldQueue
                         try {
                             $result = Article::create($article);
                             $newArticlesCount++;
-                            Log::info('New article created', ['index' => $index, 'id' => $result->id, 'title' => $result->title]);
+                            Log::info('New article created', [
+                                'index' => $index, 
+                                'id' => $result->id, 
+                                'title' => $result->title,
+                                'resource' => $result->resource
+                            ]);
                         } catch (\Exception $e) {
                             Log::error('Failed to create article', ['error' => $e->getMessage()]);
                         }
                     }
                 }
+
+                // مراقبة عدد المقالات قبل عمليات الحذف
+                Log::info('Articles count before cleaning', ['count' => Article::count()]);
 
                 if ($newArticlesCount > 0) {
                     // تأكد من أن هناك مقالات كافية قبل حذف المقالات القديمة
@@ -173,25 +185,60 @@ class ImportArticlesJob implements ShouldQueue
                         $minArticlesToKeep = self::MAX_ARTICLES * 0.5; // على الأقل نصف الحد الأقصى
                         
                         if ($totalBeforeDeletion - $oldArticlesCount >= $minArticlesToKeep) {
-                            $oldArticlesQuery->delete();
-                            Log::info('Old articles deleted', ['count' => $oldArticlesCount]);
+                            Log::info('Preparing to delete old articles', [
+                                'total' => $totalBeforeDeletion,
+                                'old_count' => $oldArticlesCount,
+                                'remaining_after' => $totalBeforeDeletion - $oldArticlesCount
+                            ]);
+                            
+                            // تسجيل معرفات المقالات التي سيتم حذفها
+                            $articlesToDelete = $oldArticlesQuery->pluck('id')->toArray();
+                            Log::info('Articles IDs to delete', ['ids' => $articlesToDelete]);
+                            
+                            $deleted = $oldArticlesQuery->delete();
+                            Log::info('Old articles deleted', ['count' => $deleted]);
                         } else {
                             // احذف فقط المقالات الأقدم لتصل إلى العدد المطلوب
                             $articlesToDelete = $totalBeforeDeletion - $minArticlesToKeep;
                             if ($articlesToDelete > 0) {
-                                Article::orderBy('published_at', 'asc')->limit($articlesToDelete)->delete();
-                                Log::info('Limited old articles deleted to maintain minimum', ['deleted' => $articlesToDelete, 'remaining' => $minArticlesToKeep]);
+                                $idsToDelete = Article::orderBy('published_at', 'asc')
+                                    ->limit($articlesToDelete)
+                                    ->pluck('id')
+                                    ->toArray();
+                                
+                                Log::info('Limited deletion IDs', ['ids' => $idsToDelete]);
+                                
+                                $deleted = Article::whereIn('id', $idsToDelete)->delete();
+                                Log::info('Limited old articles deleted to maintain minimum', [
+                                    'deleted' => $deleted, 
+                                    'remaining' => Article::count()
+                                ]);
                             }
                         }
                     }
+
+                    // مراقبة عدد المقالات بعد حذف المقالات القديمة
+                    Log::info('Articles count after age cleaning', ['count' => Article::count()]);
 
                     // تحقق مرة أخرى من العدد الإجمالي بعد حذف المقالات القديمة
                     $totalArticles = Article::count();
                     if ($totalArticles > self::MAX_ARTICLES) {
                         // لا تحذف جميع المقالات الزائدة إذا كانت ستؤدي إلى وجود عدد قليل جدًا من المقالات
                         $excess = $totalArticles - self::MAX_ARTICLES;
-                        Article::orderBy('published_at', 'asc')->limit($excess)->delete();
-                        Log::info('Excess articles removed', ['deleted' => $excess]);
+                        
+                        $idsToDelete = Article::orderBy('published_at', 'asc')
+                            ->limit($excess)
+                            ->pluck('id')
+                            ->toArray();
+                        
+                        Log::info('Excess articles to be removed', [
+                            'total' => $totalArticles,
+                            'excess' => $excess,
+                            'ids' => $idsToDelete
+                        ]);
+                        
+                        $deleted = Article::whereIn('id', $idsToDelete)->delete();
+                        Log::info('Excess articles removed', ['deleted' => $deleted]);
                     }
                 }
 
@@ -209,7 +256,7 @@ class ImportArticlesJob implements ShouldQueue
                     'recent_dates' => $articlesByDate
                 ]);
             } catch (\Exception $e) {
-                Log::error('Error saving articles to DB', ['error' => $e->getMessage()]);
+                Log::error('Error saving articles to DB', ['error' => $e->getMessage(), 'stack' => $e->getTraceAsString()]);
             }
         } else {
             Log::warning('No articles parsed from any source.');
@@ -267,9 +314,28 @@ class ImportArticlesJob implements ShouldQueue
                     $published_at = date('Y-m-d');
                 }
                 
+                // استخراج رابط المقال الأصلي
+                $resource = '';
+                if ($entry->link && count($entry->link)) {
+                    foreach ($entry->link as $link) {
+                        $attributes = $link->attributes();
+                        if (isset($attributes['rel']) && (string) $attributes['rel'] === 'alternate') {
+                            $resource = (string) $attributes['href'];
+                            break;
+                        } elseif (isset($attributes['href'])) {
+                            $resource = (string) $attributes['href'];
+                        }
+                    }
+                }
+                
+                // إذا لم يتم العثور على رابط، استخدم عنوان صفحة التغذية نفسها كمصدر
+                if (empty($resource)) {
+                    $resource = $entry->id ? (string) $entry->id : '';
+                }
+                
                 $article_image = $this->selectImageForArticle($title);
                 $publisher_name = $this->selectPublisherForArticle($title, $sourceName);
-                $articles[] = compact('title', 'description', 'publisher_name', 'published_at', 'article_image');
+                $articles[] = compact('title', 'description', 'publisher_name', 'published_at', 'article_image', 'resource');
             } catch (\Exception $e) {
                 Log::error('Atom entry error', ['error' => $e->getMessage()]);
             }
@@ -322,9 +388,23 @@ class ImportArticlesJob implements ShouldQueue
                     $published_at = date('Y-m-d');
                 }
                 
+                // استخراج رابط المقال الأصلي
+                $resource = '';
+                if (isset($item->link)) {
+                    $resource = (string) $item->link;
+                } elseif (isset($item->guid)) {
+                    $isPermalink = true;
+                    if ($item->guid->attributes() && isset($item->guid->attributes()->isPermaLink)) {
+                        $isPermalink = (string) $item->guid->attributes()->isPermaLink === 'true';
+                    }
+                    if ($isPermalink) {
+                        $resource = (string) $item->guid;
+                    }
+                }
+                
                 $article_image = $this->selectImageForArticle($title);
                 $publisher_name = $this->selectPublisherForArticle($title, $sourceName);
-                $articles[] = compact('title', 'description', 'publisher_name', 'published_at', 'article_image');
+                $articles[] = compact('title', 'description', 'publisher_name', 'published_at', 'article_image', 'resource');
             } catch (\Exception $e) {
                 Log::error('RSS item error', ['error' => $e->getMessage()]);
             }
