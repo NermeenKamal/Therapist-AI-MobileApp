@@ -4,11 +4,14 @@ namespace App\Policies;
 
 use App\Models\User;
 use App\Models\Appointment;
+use Illuminate\Contracts\Auth\Authenticatable;
+
+
 
 class AppointmentPolicy
 {
     // يسمح للدكتور فقط بإنشاء موعد متاح
-    public function create(User $user): bool
+    public function create(Authenticatable $user): bool
     {
         return $user->role === 'doctor';
     }
