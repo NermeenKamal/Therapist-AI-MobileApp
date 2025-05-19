@@ -24,28 +24,47 @@ class ChatController extends Controller
     }
     
     /**
-     * Send a message in a chat
+     * إرسال رسالة في الدردشة
+     * 
+     * @param Request $request
+     * @return JsonResponse
      */
     public function sendMessage(Request $request): JsonResponse
     {
         $data = $request->validate([
             'appointment_id' => 'required|exists:appointments,id',
             'message' => 'required|string',
-            'receiver_type' => 'required|in:doctor,patient',
-            'receiver_id' => 'required|integer',
         ]);
         
-        // Determine sender type and ID based on authenticated user
         $user = Auth::user();
-        if ($user->hasRole('doctor')) {
+        $userType = $user->role;
+        
+        // تحديد نوع المرسل والمستقبل
+        if ($userType === 'doctor') {
             $senderType = 'doctor';
-            $senderId = $user->doctor->id; // Assuming relationship exists
+            $senderId = $user->doctor->id;
+            
+            // الحصول على معرف المريض من الموعد
+            $appointment = \App\Models\Appointment::find($data['appointment_id']);
+            $receiverType = 'patient';
+            $receiverId = $appointment->patient_id;
+            
+            // جلب معلومات المريض
+            $receiver = Patient::find($receiverId);
         } else {
             $senderType = 'patient';
-            $senderId = $user->patient->id; // Assuming relationship exists
+            $senderId = $user->patient->id;
+            
+            // الحصول على معرف الدكتور من الموعد
+            $appointment = \App\Models\Appointment::find($data['appointment_id']);
+            $receiverType = 'doctor';
+            $receiverId = $appointment->doctor_id;
+            
+            // جلب معلومات الدكتور
+            $receiver = Doctor::find($receiverId);
         }
         
-        // Create the chat message
+        // إنشاء رسالة الدردشة
         $chat = ChatMessage::create([
             'appointment_id' => $data['appointment_id'],
             'sender_type' => $senderType,
@@ -54,77 +73,83 @@ class ChatController extends Controller
             'is_read' => false,
         ]);
         
-        // Process sentiment analysis if sender is doctor
+        // تحليل المشاعر إذا كان المرسل هو الدكتور
         $rating = null;
         if ($senderType === 'doctor') {
             $bertResult = $this->bert->analyze($data['message']);
-            $appointment = $chat->appointment;
             
             $rating = ChatRating::create([
                 'appointment_id' => $data['appointment_id'],
-                'patient_id' => $data['receiver_id'], // Assuming receiver is patient when sender is doctor
-                'rating' => null, // This might be filled later by patient
-                'feedback' => null, // This might be filled later by patient
-                // You might want to add sentiment score and label columns to your chat_ratings table
-                // 'sentiment_score' => $bertResult['score'],
-                // 'sentiment_label' => $bertResult['label'],
+                'patient_id' => $receiverId,
+                'sentiment_score' => $bertResult['score'],
+                'sentiment_label' => $bertResult['label'],
             ]);
         }
         
-        // Send push notification
-        $receiverFcmToken = null;
-        $senderName = '';
-        
-        if ($data['receiver_type'] === 'doctor') {
-            $doctor = Doctor::find($data['receiver_id']);
-            if ($doctor) {
-                $receiverFcmToken = $doctor->fcm_token;
-            }
-            
-            if ($senderType === 'patient') {
-                $patient = Patient::find($senderId);
-                $senderName = $patient ? $patient->name : 'المريض';
-            }
-        } else { // receiver is patient
-            $patient = Patient::find($data['receiver_id']);
-            if ($patient) {
-                $receiverFcmToken = $patient->fcm_token;
-            }
-            
+        // إرسال إشعار بواسطة FCM
+        if ($receiver && $receiver->fcm_token) {
+            // استخراج اسم المرسل
             if ($senderType === 'doctor') {
-                $doctor = Doctor::find($senderId);
-                $senderName = $doctor ? $doctor->name : 'الدكتور';
+                $senderName = $user->doctor->name;
+            } else {
+                $senderName = $user->patient->name;
             }
-        }
-        
-        if ($receiverFcmToken) {
+            
             $this->fcm->sendToUser(
-                $receiverFcmToken,
+                $receiver->fcm_token,
                 'رسالة جديدة',
                 $senderName . ': ' . substr($chat->message, 0, 50),
                 [
                     'chat_id' => $chat->id,
-                    'appointment_id' => $data['appointment_id']
+                    'appointment_id' => $data['appointment_id'],
+                    'sender_type' => $senderType,
+                    'sender_id' => $senderId
                 ]
             );
         }
         
-        // Prepare response
+        // تحضير الرد
         $response = $chat->toArray();
         if ($rating) {
-            // You might want to add these fields to the response if you add them to your chat_ratings table
-            // $response['sentiment_score'] = $rating->sentiment_score;
-            // $response['sentiment_label'] = $rating->sentiment_label;
+            $response['sentiment_score'] = $rating->sentiment_score;
+            $response['sentiment_label'] = $rating->sentiment_label;
         }
         
         return response()->json($response, 201);
     }
     
     /**
-     * Get messages for a specific appointment
+     * الحصول على الرسائل لموعد محدد
+     * 
+     * @param int $appointmentId
+     * @return JsonResponse
      */
     public function getMessages(int $appointmentId): JsonResponse
     {
+        // التحقق من وصول المستخدم للموعد
+        $user = Auth::user();
+        $userType = $user->role;
+        
+        $appointment = \App\Models\Appointment::find($appointmentId);
+        
+        if (!$appointment) {
+            return response()->json(['message' => 'الموعد غير موجود'], 404);
+        }
+        
+        // التحقق من أن المستخدم الحالي هو جزء من هذا الموعد
+        $hasAccess = false;
+        
+        if ($userType === 'doctor' && $appointment->doctor_id === $user->doctor->id) {
+            $hasAccess = true;
+        } else if ($userType === 'patient' && $appointment->patient_id === $user->patient->id) {
+            $hasAccess = true;
+        }
+        
+        if (!$hasAccess) {
+            return response()->json(['message' => 'غير مصرح بالوصول لهذا الموعد'], 403);
+        }
+        
+        // جلب الرسائل
         $messages = ChatMessage::where('appointment_id', $appointmentId)
             ->orderBy('created_at')
             ->get();
@@ -133,7 +158,10 @@ class ChatController extends Controller
     }
     
     /**
-     * Mark messages as read
+     * تحديد الرسائل كمقروءة
+     * 
+     * @param Request $request
+     * @return JsonResponse
      */
     public function markAsRead(Request $request): JsonResponse
     {
@@ -142,12 +170,13 @@ class ChatController extends Controller
         ]);
         
         $user = Auth::user();
+        $userType = $user->role;
         
-        // Determine receiver type based on authenticated user
-        $receiverType = $user->hasRole('doctor') ? 'doctor' : 'patient';
-        $receiverId = $user->hasRole('doctor') ? $user->doctor->id : $user->patient->id;
+        // تحديد نوع المستقبل ومعرفه
+        $receiverType = $userType;
+        $receiverId = ($userType === 'doctor') ? $user->doctor->id : $user->patient->id;
         
-        // Mark all unread messages in this appointment where user is NOT the sender
+        // تحديث حالة القراءة للرسائل التي ليست من المستخدم الحالي
         ChatMessage::where('appointment_id', $data['appointment_id'])
             ->where(function($query) use ($receiverType, $receiverId) {
                 $query->where('sender_type', '!=', $receiverType)
@@ -160,51 +189,67 @@ class ChatController extends Controller
     }
     
     /**
-     * Get recent chats for the authenticated user
+     * الحصول على المحادثات الحديثة للمستخدم الحالي
+     * 
+     * @return JsonResponse
      */
     public function getRecentChats(): JsonResponse
     {
         $user = Auth::user();
+        $userType = $user->role;
+        $userId = ($userType === 'doctor') ? $user->doctor->id : $user->patient->id;
         
-        // Determine user type and ID
-        $userType = $user->hasRole('doctor') ? 'doctor' : 'patient';
-        $userId = $user->hasRole('doctor') ? $user->doctor->id : $user->patient->id;
+        // الحصول على معرفات المواعيد حيث شارك المستخدم في المحادثة
+        $appointmentIds = [];
         
-        // Get all appointment IDs where the user has sent or received messages
-        $appointmentIds = ChatMessage::where(function($query) use ($userType, $userId) {
-            $query->where('sender_type', $userType)
-                ->where('sender_id', $userId);
-        })->orWhere(function($query) use ($userType, $userId) {
-            // This assumes the receiver type/id are stored somewhere or can be inferred
-            // You might need to adjust this based on your database structure
-        })->pluck('appointment_id')->unique();
+        if ($userType === 'doctor') {
+            // حالة الدكتور: جلب المواعيد الخاصة به
+            $appointmentIds = \App\Models\Appointment::where('doctor_id', $userId)
+                ->pluck('id')
+                ->toArray();
+        } else {
+            // حالة المريض: جلب المواعيد الخاصة به
+            $appointmentIds = \App\Models\Appointment::where('patient_id', $userId)
+                ->pluck('id')
+                ->toArray();
+        }
         
-        // Get the latest message for each appointment
+        // للمواعيد التي بها رسائل فقط
+        $appointmentIdsWithMessages = ChatMessage::whereIn('appointment_id', $appointmentIds)
+            ->pluck('appointment_id')
+            ->unique()
+            ->toArray();
+        
+        // جلب آخر رسالة وعدد الرسائل غير المقروءة لكل موعد
         $recentChats = [];
-        foreach ($appointmentIds as $appointmentId) {
+        foreach ($appointmentIdsWithMessages as $appointmentId) {
             $latestMessage = ChatMessage::where('appointment_id', $appointmentId)
-                ->latest()
+                ->latest('created_at')
                 ->first();
                 
             if ($latestMessage) {
+                // حساب عدد الرسائل غير المقروءة للمستخدم الحالي
                 $unreadCount = ChatMessage::where('appointment_id', $appointmentId)
                     ->where('sender_type', '!=', $userType)
-                    ->where('sender_id', '!=', $userId)
                     ->where('is_read', false)
                     ->count();
-                    
+                
+                // جلب معلومات الموعد
+                $appointment = \App\Models\Appointment::with(['doctor', 'patient'])
+                    ->find($appointmentId);
+                
                 $recentChats[] = [
                     'appointment_id' => $appointmentId,
-                    'last_message' => $latestMessage,
+                    'appointment' => $appointment,
+                    'latest_message' => $latestMessage,
                     'unread_count' => $unreadCount,
-                    // You may need to fetch additional data about the appointment/other user here
                 ];
             }
         }
         
-        // Sort by latest message
+        // ترتيب حسب أحدث رسالة
         usort($recentChats, function($a, $b) {
-            return strtotime($b['last_message']['created_at']) - strtotime($a['last_message']['created_at']);
+            return strtotime($b['latest_message']['created_at']) - strtotime($a['latest_message']['created_at']);
         });
         
         return response()->json($recentChats);
