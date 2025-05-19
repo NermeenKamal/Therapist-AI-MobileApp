@@ -2,58 +2,164 @@
 
 namespace App\Services;
 
-use GuzzleHttp\Client;
-use Illuminate\Support\Facades\Log;
+use Kreait\Firebase\Messaging\CloudMessage;
+use Kreait\Firebase\Messaging\Notification;
+use Kreait\Laravel\Firebase\Facades\Firebase;
 
 class FCMService
 {
-    protected Client $http;
-    protected string $serverKey;
-
-    public function __construct()
+    /**
+     * Send notification to a specific user by FCM token
+     * 
+     * @param string $token FCM token
+     * @param string $title Notification title
+     * @param string $body Notification body
+     * @param array $data Additional data
+     * @return array Response from Firebase
+     */
+    public function sendToUser(string $token, string $title, string $body, array $data = []): array
     {
-        $this->http = new Client();
-        $this->serverKey = config('services.fcm.server_key');
-    }
+        $messaging = Firebase::messaging();
 
-    public function sendToUser(string $token, string $title, string $body, array $data = []): void
-    {
+        $notification = Notification::create($title, $body);
+        
+        $message = CloudMessage::withTarget('token', $token)
+            ->withNotification($notification)
+            ->withData($data);
+        
         try {
-            $response = $this->http->post('https://fcm.googleapis.com/fcm/send', [
-                'headers' => [
-                    'Authorization' => 'key=' . $this->serverKey,
-                    'Content-Type'  => 'application/json',
-                ],
-                'json' => [
-                    'to'   => $token,
-                    'notification' => ['title' => $title, 'body'  => $body],
-                    'data' => $data,
-                ],
-            ]);
-            Log::info('FCM sendToUser', ['status' => $response->getStatusCode()]);
+            $response = $messaging->send($message);
+            return [
+                'success' => true,
+                'message' => 'Notification sent successfully',
+                'result' => $response,
+            ];
         } catch (\Exception $e) {
-            Log::error('FCM sendToUser failed', ['error' => $e->getMessage()]);
+            logger()->error('FCM Error: ' . $e->getMessage());
+            return [
+                'success' => false,
+                'message' => $e->getMessage()
+            ];
         }
     }
 
-    public function sendBulk(array $tokens, string $title, string $body, array $data = []): void
+    /**
+     * Send notification to multiple users by FCM tokens
+     * 
+     * @param array $tokens Array of FCM tokens
+     * @param string $title Notification title
+     * @param string $body Notification body
+     * @param array $data Additional data
+     * @return array Response from Firebase
+     */
+    public function sendToMultipleUsers(array $tokens, string $title, string $body, array $data = []): array
     {
-        if (empty($tokens)) return;
+        if (empty($tokens)) {
+            return [
+                'success' => false,
+                'message' => 'No tokens provided'
+            ];
+        }
+
+        $messaging = Firebase::messaging();
+        
+        $notification = Notification::create($title, $body);
+        
+        $message = CloudMessage::new()
+            ->withNotification($notification)
+            ->withData($data);
+        
         try {
-            $response = $this->http->post('https://fcm.googleapis.com/fcm/send', [
-                'headers' => [
-                    'Authorization' => 'key=' . $this->serverKey,
-                    'Content-Type'  => 'application/json',
+            $response = $messaging->sendMulticast($message, $tokens);
+            
+            return [
+                'success' => true,
+                'message' => 'Notifications sent successfully',
+                'result' => [
+                    'success_count' => $response->successes()->count(),
+                    'failure_count' => $response->failures()->count(),
                 ],
-                'json' => [
-                    'registration_ids' => $tokens,
-                    'notification' => ['title' => $title, 'body'  => $body],
-                    'data' => $data,
-                ],
-            ]);
-            Log::info('FCM sendBulk', ['status' => $response->getStatusCode()]);
+            ];
         } catch (\Exception $e) {
-            Log::error('FCM sendBulk failed', ['error' => $e->getMessage()]);
+            logger()->error('FCM Error: ' . $e->getMessage());
+            return [
+                'success' => false,
+                'message' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Send a topic-based notification
+     * 
+     * @param string $topic Topic name
+     * @param string $title Notification title
+     * @param string $body Notification body
+     * @param array $data Additional data
+     * @return array Response from Firebase
+     */
+    public function sendToTopic(string $topic, string $title, string $body, array $data = []): array
+    {
+        $messaging = Firebase::messaging();
+        
+        $notification = Notification::create($title, $body);
+        
+        $message = CloudMessage::withTarget('topic', $topic)
+            ->withNotification($notification)
+            ->withData($data);
+        
+        try {
+            $response = $messaging->send($message);
+            
+            return [
+                'success' => true,
+                'message' => 'Topic notification sent successfully',
+                'result' => $response,
+            ];
+        } catch (\Exception $e) {
+            logger()->error('FCM Topic Error: ' . $e->getMessage());
+            return [
+                'success' => false,
+                'message' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Subscribe tokens to a topic
+     * 
+     * @param array $tokens Array of FCM tokens
+     * @param string $topic Topic name
+     * @return array Response from Firebase
+     */
+    public function subscribeToTopic(array $tokens, string $topic): array
+    {
+        if (empty($tokens)) {
+            return [
+                'success' => false,
+                'message' => 'No tokens provided'
+            ];
+        }
+
+        $messaging = Firebase::messaging();
+        
+        try {
+            $response = $messaging->subscribeToTopic($topic, $tokens);
+            
+            return [
+                'success' => true,
+                'message' => 'Subscribed to topic successfully',
+                'result' => [
+                    'success_count' => $response->successes()->count(),
+                    'failure_count' => $response->failures()->count(),
+                ],
+            ];
+        } catch (\Exception $e) {
+            logger()->error('FCM Topic Subscription Error: ' . $e->getMessage());
+            return [
+                'success' => false, 
+                'message' => $e->getMessage()
+            ];
         }
     }
 }
