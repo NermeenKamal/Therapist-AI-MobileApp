@@ -12,42 +12,42 @@ class PatientController extends Controller
    
 
     public function updateProfile(Request $request): JsonResponse
-    {
-        $patient = Auth::user();
+{
+    $patient = Auth::user();
 
-        if (!$patient) {
-            return response()->json(['message' => 'There is no account for that patient'], 404);
-        }
-
-        $data = $request->validate([
-            'name' => 'nullable|string|max:255',
-            'profile_image' => 'nullable|image|max:5120',
-        ]);
-
-        $updatedFields = [];
-
-        if ($request->hasFile('profile_image')) {
-            $uploadedFile = Cloudinary::upload($request->file('profile_image')->getRealPath());
-            $uploadedFileUrl = $uploadedFile->getSecurePath();
-        
-            logger('Uploaded to Cloudinary: ' . $uploadedFileUrl); // للتأكد من الرفع
-        
-            $data['profile_image'] = $uploadedFileUrl;
-            $updatedFields[] = 'Profile Image';
-        }
-
-        if (isset($data['name'])) {
-            $updatedFields[] = 'Name';
-        }
-
-        $patient->update($data);
-
-        $message = count($updatedFields)
-            ? 'Updated: ' . implode(' and ', $updatedFields)
-            : 'No changes were made';
-
-        return response()->json(['message' => $message, 'patient' => $patient]);
+    if (!$patient) {
+        return response()->json(['message' => 'There is no account for that patient'], 404);
     }
+
+    $updatedFields = [];
+
+    // نتحقق يدويًا من الحقول بدلاً من validate مباشرة
+    $validated = [];
+
+    if ($request->has('name')) {
+        $request->validate(['name' => 'nullable|string|max:255']);
+        $validated['name'] = $request->input('name');
+        $updatedFields[] = 'Name';
+    }
+
+    if ($request->hasFile('profile_image')) {
+        $request->validate(['profile_image' => 'nullable|image|max:5120']);
+        $uploadedFile = Cloudinary::upload($request->file('profile_image')->getRealPath());
+        $uploadedFileUrl = $uploadedFile->getSecurePath();
+        $validated['profile_image'] = $uploadedFileUrl;
+        $updatedFields[] = 'Profile Image';
+    }
+
+    if (!empty($validated)) {
+        $patient->update($validated);
+    }
+
+    $message = count($updatedFields)
+        ? 'Updated: ' . implode(' and ', $updatedFields)
+        : 'No changes were made';
+
+    return response()->json(['message' => $message, 'patient' => $patient]);
+}
 
     
     /**
