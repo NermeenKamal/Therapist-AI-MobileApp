@@ -5,14 +5,15 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\JsonResponse;
 use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
-
+use Illuminate\Support\Facades\Log;
+use Exception;
 
 class PatientController extends Controller
 {
     public function updateProfile(Request $request): JsonResponse
     {
         // تسجيل المعلومات للتشخيص
-        \Log::info('Update Profile Request', [
+        Log::info('Update Profile Request', [
             'has_files' => $request->hasFile('profile_image'),
             'all_files' => $request->allFiles(),
             'all_inputs' => $request->all(),
@@ -41,7 +42,7 @@ class PatientController extends Controller
             $hasFile = $request->hasFile('profile_image');
             
             if ($hasFile) {
-                \Log::info('Profile image file detected');
+                Log::info('Profile image file detected');
                 
                 // التحقق من صحة الملف
                 $request->validate(['profile_image' => 'image|max:5120']);
@@ -56,21 +57,49 @@ class PatientController extends Controller
                         'size' => $profileImage->getSize(),
                         'name' => $profileImage->getClientOriginalName()
                     ];
-                    \Log::info('File information', $fileInfo);
+                    Log::info('File information', $fileInfo);
                     
-                    // الرفع إلى Cloudinary
-                    $uploadResult = Cloudinary::uploadFile($profileImage->getRealPath());
+                    // التحقق من تكوين Cloudinary قبل المتابعة
+                    if (!$this->isCloudinaryConfigured()) {
+                        Log::error('Cloudinary configuration missing or invalid');
+                        return response()->json([
+                            'message' => 'Server configuration error',
+                            'details' => 'Image upload service is not properly configured'
+                        ], 500);
+                    }
                     
-                    if ($uploadResult && method_exists($uploadResult, 'getSecurePath')) {
-                        $uploadedFileUrl = $uploadResult->getSecurePath();
-                        $validated['profile_image'] = $uploadedFileUrl;
-                        $updatedFields[] = 'Profile Image';
-                        \Log::info('File uploaded successfully', ['url' => $uploadedFileUrl]);
-                    } else {
-                        throw new \Exception('Invalid upload result from Cloudinary');
+                    try {
+                        // الرفع إلى Cloudinary مع مناولة الأخطاء بشكل صريح
+                        $uploadResult = Cloudinary::uploadFile($profileImage->getRealPath());
+                        
+                        if ($uploadResult && method_exists($uploadResult, 'getSecurePath')) {
+                            $uploadedFileUrl = $uploadResult->getSecurePath();
+                            $validated['profile_image'] = $uploadedFileUrl;
+                            $updatedFields[] = 'Profile Image';
+                            Log::info('File uploaded successfully', ['url' => $uploadedFileUrl]);
+                        } else {
+                            throw new Exception('Invalid upload result from Cloudinary');
+                        }
+                    } catch (Exception $cloudinaryError) {
+                        Log::error('Cloudinary upload error', [
+                            'message' => $cloudinaryError->getMessage(),
+                            'file' => $cloudinaryError->getFile(),
+                            'line' => $cloudinaryError->getLine()
+                        ]);
+                        
+                        // حل بديل: احتفظ بالصورة محليًا إذا فشل Cloudinary
+                        // تعليق: يمكنك إضافة هذا الجزء إذا أردت تخزين الصور محليًا كحل بديل
+                        // $localPath = $profileImage->store('profile_images', 'public');
+                        // $validated['profile_image'] = asset('storage/' . $localPath);
+                        // $updatedFields[] = 'Profile Image (Local Storage)';
+                        
+                        return response()->json([
+                            'message' => 'Error uploading image to cloud storage',
+                            'error' => $cloudinaryError->getMessage()
+                        ], 500);
                     }
                 } else {
-                    \Log::warning('Invalid profile image file');
+                    Log::warning('Invalid profile image file');
                     return response()->json([
                         'message' => 'Invalid profile image file',
                         'details' => 'The uploaded file is invalid or corrupted'
@@ -80,7 +109,7 @@ class PatientController extends Controller
                 // تعامل خاص مع المدخلات غير الصالحة
                 $profileImageInput = $request->input('profile_image');
                 
-                \Log::warning('Invalid profile_image input', [
+                Log::warning('Invalid profile_image input', [
                     'type' => gettype($profileImageInput),
                     'value' => $profileImageInput
                 ]);
@@ -91,9 +120,9 @@ class PatientController extends Controller
                     'received_type' => gettype($profileImageInput)
                 ], 400);
             }
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             // تسجيل معلومات الخطأ بالتفصيل
-            \Log::error('Profile image processing error', [
+            Log::error('Profile image processing error', [
                 'message' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -112,12 +141,12 @@ class PatientController extends Controller
             try {
                 $patient->update($validated);
                 
-                \Log::info('Patient profile updated', [
+                Log::info('Patient profile updated', [
                     'patient_id' => $patient->id,
                     'updated_fields' => $updatedFields
                 ]);
-            } catch (\Exception $e) {
-                \Log::error('Error updating patient profile', [
+            } catch (Exception $e) {
+                Log::error('Error updating patient profile', [
                     'message' => $e->getMessage(),
                     'file' => $e->getFile(),
                     'line' => $e->getLine()
@@ -139,6 +168,20 @@ class PatientController extends Controller
             'patient' => $patient,
             'updated_fields' => $updatedFields
         ]);
+    }
+
+    /**
+     * Check if Cloudinary is properly configured
+     *
+     * @return bool
+     */
+    private function isCloudinaryConfigured(): bool
+    {
+        $cloudName = config('cloudinary.cloud_name');
+        $apiKey = config('cloudinary.api_key');
+        $apiSecret = config('cloudinary.api_secret');
+        
+        return !empty($cloudName) && !empty($apiKey) && !empty($apiSecret);
     }
 
     /**
