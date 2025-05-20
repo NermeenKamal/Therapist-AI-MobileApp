@@ -58,7 +58,7 @@ class PatientController extends Controller
         $patient = $user->patient;
         
         if (!$patient) {
-            return response()->json(['message' => 'لم يتم العثور على سجل المريض المرتبط بهذا الحساب'], 404);
+            return response()->json(['message' => 'There is no account for that patient'], 404);
         }
         
         return response()->json([
@@ -79,7 +79,7 @@ class PatientController extends Controller
         $patient = $user->patient;
         
         if (!$patient) {
-            return response()->json(['message' => 'لم يتم العثور على سجل المريض المرتبط بهذا الحساب'], 404);
+            return response()->json(['message' => 'There is no account for that patient'], 404);
         }
         
         // هنا يمكنك جلب التاريخ الطبي (المواعيد السابقة، التشخيصات، إلخ)
