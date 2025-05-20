@@ -4,44 +4,47 @@ use App\Models\Patient;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\JsonResponse;
+use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
+
+
 class PatientController extends Controller
 {
-    /**
-     * تعديل بيانات البروفايل للمريض الحالي
-     * يسمح فقط بتعديل الاسم وصورة الملف الشخصي
-     *
-     * @param Request $request
-     * @return JsonResponse
-     */
+   
+
     public function updateProfile(Request $request): JsonResponse
     {
-        // الحصول على المريض مباشرة من نظام المصادقة
         $patient = Auth::user();
-        
+
         if (!$patient) {
             return response()->json(['message' => 'There is no account for that patient'], 404);
         }
-        
+
         $data = $request->validate([
             'name' => 'nullable|string|max:255',
-            'profile_image' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120', // 5MB
+            'profile_image' => 'nullable|image|max:5120',
         ]);
-        
-        // رفع صورة جديدة إذا كانت موجودة
+
+        $updatedFields = [];
+
         if ($request->hasFile('profile_image')) {
-            $file = $request->file('profile_image');
-            $path = $file->store('patient_profiles', 's3');
-            $url = \Storage::disk('s3')->url($path);
-            $data['profile_image'] = $url;
+            $uploadedFileUrl = Cloudinary::upload($request->file('profile_image')->getRealPath())->getSecurePath();
+            $data['profile_image'] = $uploadedFileUrl;
+            $updatedFields[] = 'Profile Image';
         }
-        
+
+        if (isset($data['name'])) {
+            $updatedFields[] = 'Name';
+        }
+
         $patient->update($data);
-        
-        return response()->json([
-            'message' => 'Profile updated successfully',
-            'patient' => $patient
-        ]);
+
+        $message = count($updatedFields)
+            ? 'Updated: ' . implode(' and ', $updatedFields)
+            : 'No changes were made';
+
+        return response()->json(['message' => $message, 'patient' => $patient]);
     }
+
     
     /**
      * عرض ملف المريض الشخصي
