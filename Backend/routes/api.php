@@ -14,7 +14,7 @@ use App\Controllers\AIChatbotController;
 use App\Controllers\DoctorScheduleController;
 use App\Controllers\DoctorController;
 use App\Controllers\ArticleController;
-use App\Controllers\FCMController;
+use App\Controllers\fcm_controller;
 
 // reset password routes
 Route::post('/forgot-password', [ForgotPasswordController::class, 'sendResetCode']);
