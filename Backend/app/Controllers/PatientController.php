@@ -29,15 +29,46 @@ class PatientController extends Controller
             $updatedFields[] = 'Name';
         }
 
-        if ($request->hasFile('profile_image')) {
-            $request->validate(['profile_image' => 'nullable|image|max:5120']);
-            // Make sure the file is valid before attempting to upload
-            if ($request->file('profile_image') && $request->file('profile_image')->isValid()) {
-                $uploadedFile = Cloudinary::uploadFile($request->file('profile_image')->getPathname());
-                $uploadedFileUrl = $uploadedFile->getSecurePath();
-                $validated['profile_image'] = $uploadedFileUrl;
-                $updatedFields[] = 'Profile Image';
+        // تحسين التعامل مع الملفات
+        try {
+            if ($request->hasFile('profile_image')) {
+                $request->validate(['profile_image' => 'nullable|image|max:5120']);
+                
+                $profileImage = $request->file('profile_image');
+                
+                // التحقق بشكل مفصل من صحة الملف
+                if ($profileImage && $profileImage->isValid()) {
+                    // الحصول على معلومات الملف للتصحيح
+                    $mime = $profileImage->getMimeType();
+                    $size = $profileImage->getSize();
+                    $originalName = $profileImage->getClientOriginalName();
+                    
+                    // تنفيذ الرفع إلى Cloudinary
+                    $uploadedFile = Cloudinary::uploadFile($profileImage->getPathname());
+                    $uploadedFileUrl = $uploadedFile->getSecurePath();
+                    $validated['profile_image'] = $uploadedFileUrl;
+                    $updatedFields[] = 'Profile Image';
+                } else {
+                    // رسالة خطأ إذا كان الملف غير صالح
+                    return response()->json([
+                        'message' => 'Invalid profile image file',
+                        'details' => 'The uploaded file is invalid or corrupted'
+                    ], 400);
+                }
+            } elseif ($request->has('profile_image')) {
+                // إذا تم تقديم profile_image ولكنه ليس ملفًا (مثل كائن JSON فارغ)
+                return response()->json([
+                    'message' => 'Invalid profile image format',
+                    'details' => 'profile_image should be a file, not a JSON object',
+                    'tip' => 'When using Insomnia, select File type for the profile_image field'
+                ], 400);
             }
+        } catch (\Exception $e) {
+            // التقاط أي أخطاء أثناء معالجة الملف
+            return response()->json([
+                'message' => 'Error processing profile image',
+                'error' => $e->getMessage()
+            ], 500);
         }
 
         if (!empty($validated)) {
