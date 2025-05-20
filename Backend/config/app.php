@@ -124,10 +124,6 @@ return [
     ],
 
     
-    'providers' => [
-        // ...
-        App\Providers\CloudinaryServiceProvider::class,
-    ],
 
 
 ];
