@@ -14,7 +14,7 @@ use App\Controllers\AIChatbotController;
 use App\Controllers\DoctorScheduleController;
 use App\Controllers\DoctorController;
 use App\Controllers\ArticleController;
-use App\Controllers\fcm_controller;
+use App\Controllers\FCMController;
 
 // reset password routes
 Route::post('/forgot-password', [ForgotPasswordController::class, 'sendResetCode']);
@@ -45,8 +45,8 @@ Route::middleware('auth:sanctum')->group(function () {
     
     // Firebase Cloud Messaging (FCM)
     Route::post('fcm/update-token', [FCMController::class, 'updateToken']);
-    Route::post('fcm/subscribe-topic', [fcm_controller::class, 'subscribeTopic']);
-    Route::post('fcm/send-notification', [fcm_controller::class, 'sendNotification'])->middleware('role:admin');
+    Route::post('fcm/subscribe-topic', [FCMController::class, 'subscribeTopic']);
+    Route::post('fcm/send-notification', [FCMController::class, 'sendNotification'])->middleware('role:admin');
 
     // Notifications
     Route::get('notifications', [NotificationController::class, 'index']);
