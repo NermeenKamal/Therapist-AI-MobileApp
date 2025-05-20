@@ -28,12 +28,13 @@ class DoctorController extends Controller
         // رفع صورة جديدة لو موجودة
         if ($request->hasFile('profile_image')) {
             $file = $request->file('profile_image');
-            $path = $file->store('doctor_profiles', 'public');
-            $data['profile_image'] = $path;
+            $path = $file->store('doctor_profiles', 's3');
+            $url = \Storage::disk('s3')->url($path);
+            $data['profile_image'] = $url;
         }
 
         $doctor->update($data);
-        return response()->json(['message' => 'تم تحديث البيانات بنجاح', 'doctor' => $doctor]);
+        return response()->json(['message' => 'Profile updated successfully', 'doctor' => $doctor]);
     }
 
     // جلب كل الدكاترة حسب التخصص مع متوسط التقييم
