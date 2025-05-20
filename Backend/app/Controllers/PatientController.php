@@ -27,7 +27,11 @@ class PatientController extends Controller
         $updatedFields = [];
 
         if ($request->hasFile('profile_image')) {
-            $uploadedFileUrl = Cloudinary::upload($request->file('profile_image')->getRealPath())->getSecurePath();
+            $uploadedFile = Cloudinary::upload($request->file('profile_image')->getRealPath());
+            $uploadedFileUrl = $uploadedFile->getSecurePath();
+        
+            logger('Uploaded to Cloudinary: ' . $uploadedFileUrl); // للتأكد من الرفع
+        
             $data['profile_image'] = $uploadedFileUrl;
             $updatedFields[] = 'Profile Image';
         }
