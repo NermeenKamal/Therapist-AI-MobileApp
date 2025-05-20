@@ -11,6 +11,7 @@ class PatientController extends Controller
 {
     /**
      * تعديل بيانات البروفايل للمريض الحالي
+     * يسمح فقط بتعديل الاسم وصورة الملف الشخصي
      *
      * @param Request $request
      * @return JsonResponse
@@ -28,15 +29,7 @@ class PatientController extends Controller
         
         $data = $request->validate([
             'name' => 'nullable|string|max:255',
-            'date_of_birth' => 'nullable|date',
-            'gender' => 'nullable|in:male,female',
-            'height' => 'nullable|numeric|min:0',
-            'weight' => 'nullable|numeric|min:0',
-            'blood_type' => 'nullable|string|max:10',
-            'chronic_diseases' => 'nullable|string',
-            'allergies' => 'nullable|string',
-            'current_medications' => 'nullable|string',
-            'profile_image' => 'nullable|image|max:4096', // 4MB
+            'profile_image' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120', // 5MB
         ]);
         
         // رفع صورة جديدة إذا كانت موجودة
@@ -71,14 +64,6 @@ class PatientController extends Controller
         return response()->json([
             'id' => $patient->id,
             'name' => $patient->name,
-            'date_of_birth' => $patient->date_of_birth,
-            'gender' => $patient->gender,
-            'height' => $patient->height,
-            'weight' => $patient->weight,
-            'blood_type' => $patient->blood_type,
-            'chronic_diseases' => $patient->chronic_diseases,
-            'allergies' => $patient->allergies,
-            'current_medications' => $patient->current_medications,
             'profile_image' => $patient->profile_image,
         ]);
     }
