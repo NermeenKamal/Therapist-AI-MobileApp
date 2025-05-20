@@ -176,13 +176,23 @@ class PatientController extends Controller
      * @return bool
      */
     private function isCloudinaryConfigured(): bool
-    {
-        $cloudName = config('cloudinary.cloud_name');
-        $apiKey = config('cloudinary.api_key');
-        $apiSecret = config('cloudinary.api_secret');
-        
-        return !empty($cloudName) && !empty($apiKey) && !empty($apiSecret);
-    }
+{
+    $cloudName = config('cloudinary.cloud_name');
+    $apiKey = config('cloudinary.api_key');
+    $apiSecret = config('cloudinary.api_secret');
+    $cloudinaryUrl = config('cloudinary.url');
+    
+    // تسجيل معلومات التكوين للتشخيص (مع إخفاء المعلومات الحساسة)
+    Log::info('Cloudinary configuration check', [
+        'cloud_name_set' => !empty($cloudName),
+        'api_key_set' => !empty($apiKey),
+        'api_secret_set' => !empty($apiSecret),
+        'cloudinary_url_set' => !empty($cloudinaryUrl)
+    ]);
+    
+    return !empty($cloudName) && !empty($apiKey) && !empty($apiSecret);
+}
+
 
     /**
      * عرض ملف المريض الشخصي
