@@ -28,14 +28,10 @@ class PatientController extends Controller
 
         if ($request->hasFile('profile_image')) {
             $uploadedFile = Cloudinary::upload($request->file('profile_image')->getRealPath());
-            logger('✅ Cloudinary upload result: ' . json_encode($uploadedFile));
-
             $uploadedFileUrl = $uploadedFile->getSecurePath();
         
             logger('Uploaded to Cloudinary: ' . $uploadedFileUrl); // للتأكد من الرفع
-            logger('🚀 Request Data: ' . json_encode($request->all()));
-            logger('📁 Has profile image: ' . ($request->hasFile('profile_image') ? 'Yes' : 'No'));
-            
+        
             $data['profile_image'] = $uploadedFileUrl;
             $updatedFields[] = 'Profile Image';
         }
