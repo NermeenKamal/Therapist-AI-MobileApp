@@ -44,9 +44,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('chat/recent', [ChatController::class, 'getRecentChats']);
     
     // Firebase Cloud Messaging (FCM)
-    Route::post('fcm/update-token', [FCMController::class, 'updateToken']);
-    Route::post('fcm/subscribe-topic', [FCMController::class, 'subscribeTopic']);
-    Route::post('fcm/send-notification', [FCMController::class, 'sendNotification'])->middleware('role:admin');
+    Route::post('fcm/update-token', [fcm_controller::class, 'updateToken']);
+    Route::post('fcm/subscribe-topic', [fcm_controller::class, 'subscribeTopic']);
+    Route::post('fcm/send-notification', [fcm_controller::class, 'sendNotification'])->middleware('role:admin');
 
     // Notifications
     Route::get('notifications', [NotificationController::class, 'index']);
