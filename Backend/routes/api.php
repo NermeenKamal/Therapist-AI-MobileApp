@@ -14,6 +14,7 @@ use App\Controllers\AIChatbotController;
 use App\Controllers\DoctorScheduleController;
 use App\Controllers\DoctorController;
 use App\Controllers\ArticleController;
+use App\Controllers\FCMController;
 
 // reset password routes
 Route::post('/forgot-password', [ForgotPasswordController::class, 'sendResetCode']);
@@ -36,9 +37,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/appointments/book/{id}', [AppointmentController::class, 'bookAvailableAppointment']);
     Route::get('/appointments/doctor/{doctorId}/available', [AppointmentController::class, 'availableForDoctor']);
 
-    // Chat
+    // Chat - نظام المحادثات المُحسَّن مع Firebase
     Route::post('chat/send', [ChatController::class, 'sendMessage']);
-    Route::get('chat/{userId}', [ChatController::class, 'getMessages']);
+    Route::get('chat/appointment/{appointmentId}', [ChatController::class, 'getMessages']);
+    Route::post('chat/read', [ChatController::class, 'markAsRead']);
+    Route::get('chat/recent', [ChatController::class, 'getRecentChats']);
+    
+    // Firebase Cloud Messaging (FCM)
+    Route::post('fcm/update-token', [FCMController::class, 'updateToken']);
+    Route::post('fcm/subscribe-topic', [FCMController::class, 'subscribeTopic']);
+    Route::post('fcm/send-notification', [FCMController::class, 'sendNotification'])->middleware('role:admin');
 
     // Notifications
     Route::get('notifications', [NotificationController::class, 'index']);
@@ -71,4 +79,3 @@ Route::middleware('auth:sanctum')->group(function () {
     // Article Routes
     Route::get('/articles', [ArticleController::class, 'index']);
 });
-
