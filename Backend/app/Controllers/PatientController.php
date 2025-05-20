@@ -1,12 +1,9 @@
 <?php
-
 namespace App\Controllers;
-
 use App\Models\Patient;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\JsonResponse;
-
 class PatientController extends Controller
 {
     /**
@@ -18,10 +15,8 @@ class PatientController extends Controller
      */
     public function updateProfile(Request $request): JsonResponse
     {
-        $user = Auth::user();
-        
-        // التحقق من وجود المريض المرتبط بالمستخدم
-        $patient = $user->patient;
+        // الحصول على المريض مباشرة من نظام المصادقة
+        $patient = Auth::user();
         
         if (!$patient) {
             return response()->json(['message' => 'There is no account for that patient'], 404);
@@ -54,8 +49,7 @@ class PatientController extends Controller
      */
     public function showProfile(): JsonResponse
     {
-        $user = Auth::user();
-        $patient = $user->patient;
+        $patient = Auth::user();
         
         if (!$patient) {
             return response()->json(['message' => 'There is no account for that patient'], 404);
@@ -75,8 +69,7 @@ class PatientController extends Controller
      */
     public function getMedicalHistory(): JsonResponse
     {
-        $user = Auth::user();
-        $patient = $user->patient;
+        $patient = Auth::user();
         
         if (!$patient) {
             return response()->json(['message' => 'There is no account for that patient'], 404);
