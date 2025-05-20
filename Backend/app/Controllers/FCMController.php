@@ -10,12 +10,12 @@ use App\Services\FCMService;
 class FCMController extends Controller
 {
     protected FCMService $fcmService;
-
+    
     public function __construct(FCMService $fcmService)
     {
         $this->fcmService = $fcmService;
     }
-
+    
     /**
      * تحديث رمز FCM للمستخدم الحالي
      * 
@@ -27,28 +27,54 @@ class FCMController extends Controller
         $request->validate([
             'fcm_token' => 'required|string'
         ]);
-
+        
         $user = Auth::user();
         $userType = $user->role;
         $fcmToken = $request->input('fcm_token');
-
+        
         // تحديث رمز FCM حسب نوع المستخدم (دكتور أو مريض)
         if ($userType === 'doctor') {
             $doctor = $user->doctor; // بافتراض وجود علاقة بين نموذج المستخدم والدكتور
+            
+            // التحقق من وجود سجل الطبيب
+            if (!$doctor) {
+                // إنشاء سجل جديد للطبيب أو إعادة رسالة خطأ
+                return response()->json([
+                    'success' => false,
+                    'message' => 'لم يتم العثور على سجل الطبيب المرتبط بهذا الحساب'
+                ], 404);
+            }
+            
             $doctor->fcm_token = $fcmToken;
             $doctor->save();
         } else if ($userType === 'patient') {
             $patient = $user->patient; // بافتراض وجود علاقة بين نموذج المستخدم والمريض
+            
+            // التحقق من وجود سجل المريض
+            if (!$patient) {
+                // إنشاء سجل جديد للمريض أو إعادة رسالة خطأ
+                return response()->json([
+                    'success' => false,
+                    'message' => 'لم يتم العثور على سجل المريض المرتبط بهذا الحساب'
+                ], 404);
+            }
+            
             $patient->fcm_token = $fcmToken;
             $patient->save();
+        } else {
+            // في حالة كان نوع المستخدم غير معروف
+            return response()->json([
+                'success' => false,
+                'message' => 'نوع المستخدم غير صالح'
+            ], 400);
         }
-
+        
         return response()->json([
             'success' => true,
             'message' => 'تم تحديث رمز FCM بنجاح'
         ]);
     }
-
+    
     /**
      * الاشتراك في موضوع معين
      * 
@@ -60,37 +86,54 @@ class FCMController extends Controller
         $request->validate([
             'topic' => 'required|string',
         ]);
-
+        
         $user = Auth::user();
         $userType = $user->role;
         $topic = $request->input('topic');
         $fcmToken = null;
-
+        
         // الحصول على رمز FCM للمستخدم الحالي
         if ($userType === 'doctor') {
             $doctor = $user->doctor;
+            if (!$doctor) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'لم يتم العثور على سجل الطبيب المرتبط بهذا الحساب'
+                ], 404);
+            }
             $fcmToken = $doctor->fcm_token;
         } else if ($userType === 'patient') {
             $patient = $user->patient;
+            if (!$patient) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'لم يتم العثور على سجل المريض المرتبط بهذا الحساب'
+                ], 404);
+            }
             $fcmToken = $patient->fcm_token;
+        } else {
+            return response()->json([
+                'success' => false,
+                'message' => 'نوع المستخدم غير صالح'
+            ], 400);
         }
-
+        
         if (!$fcmToken) {
             return response()->json([
                 'success' => false,
                 'message' => 'لم يتم العثور على رمز FCM للمستخدم'
             ], 400);
         }
-
+        
         // الاشتراك في الموضوع
         $result = $this->fcmService->subscribeToTopic([$fcmToken], $topic);
-
+        
         return response()->json([
             'success' => $result['success'],
             'message' => $result['message']
         ]);
     }
-
+    
     /**
      * إرسال إشعار للمستخدمين (محدود للمسؤولين فقط)
      * 
@@ -107,11 +150,11 @@ class FCMController extends Controller
             'body' => 'required|string',
             'data' => 'sometimes|array'
         ]);
-
+        
         $title = $request->input('title');
         $body = $request->input('body');
         $data = $request->input('data', []);
-
+        
         // إرسال إشعار إما لموضوع أو لرموز محددة
         if ($request->has('topic')) {
             $topic = $request->input('topic');
@@ -120,7 +163,7 @@ class FCMController extends Controller
             $tokens = $request->input('tokens');
             $result = $this->fcmService->sendToMultipleUsers($tokens, $title, $body, $data);
         }
-
+        
         return response()->json([
             'success' => $result['success'],
             'message' => $result['message'],
