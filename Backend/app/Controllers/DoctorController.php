@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\JsonResponse;
 use App\Models\DoctorSchedule;
 use App\Models\ChatRating;
+use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
+
 
 class DoctorController extends Controller
 {
@@ -15,6 +17,7 @@ class DoctorController extends Controller
     public function updateProfile(Request $request): JsonResponse
     {
         $doctor = Auth::user();
+
         if (!$doctor || !$doctor instanceof Doctor) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
@@ -25,17 +28,27 @@ class DoctorController extends Controller
             'profile_image' => 'nullable|image|max:4096', // 4MB
         ]);
 
-        // رفع صورة جديدة لو موجودة
+        $updatedFields = [];
+
         if ($request->hasFile('profile_image')) {
-            $file = $request->file('profile_image');
-            $path = $file->store('doctor_profiles', 's3');
-            $url = \Storage::disk('s3')->url($path);
-            $data['profile_image'] = $url;
+            $uploadedFileUrl = Cloudinary::upload($request->file('profile_image')->getRealPath())->getSecurePath();
+            $data['profile_image'] = $uploadedFileUrl;
+            $updatedFields[] = 'Profile Image';
+        }
+
+        if (isset($data['bio']) || isset($data['session_price'])) {
+            $updatedFields[] = 'Data';
         }
 
         $doctor->update($data);
-        return response()->json(['message' => 'Profile updated successfully', 'doctor' => $doctor]);
+
+        $message = count($updatedFields)
+            ? 'Updated: ' . implode(' and ', $updatedFields)
+            : 'No changes were made';
+
+        return response()->json(['message' => $message, 'doctor' => $doctor]);
     }
+
 
     // جلب كل الدكاترة حسب التخصص مع متوسط التقييم
     public function index(Request $request): JsonResponse
