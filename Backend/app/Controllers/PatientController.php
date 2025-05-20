@@ -24,7 +24,7 @@ class PatientController extends Controller
         $patient = $user->patient;
         
         if (!$patient) {
-            return response()->json(['message' => 'لم يتم العثور على سجل المريض المرتبط بهذا الحساب'], 404);
+            return response()->json(['message' => 'There is no account for that patient'], 404);
         }
         
         $data = $request->validate([
@@ -42,7 +42,7 @@ class PatientController extends Controller
         $patient->update($data);
         
         return response()->json([
-            'message' => 'تم تحديث البيانات بنجاح',
+            'message' => 'Profile updated successfully',
             'patient' => $patient
         ]);
     }
