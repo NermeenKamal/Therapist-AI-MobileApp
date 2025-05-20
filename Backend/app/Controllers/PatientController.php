@@ -30,8 +30,9 @@ class PatientController extends Controller
         // رفع صورة جديدة إذا كانت موجودة
         if ($request->hasFile('profile_image')) {
             $file = $request->file('profile_image');
-            $path = $file->store('patient_profiles', 'public');
-            $data['profile_image'] = $path;
+            $path = $file->store('patient_profiles', 's3');
+            $url = \Storage::disk('s3')->url($path);
+            $data['profile_image'] = $url;
         }
         
         $patient->update($data);
