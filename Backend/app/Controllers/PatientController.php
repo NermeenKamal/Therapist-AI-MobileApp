@@ -32,7 +32,7 @@ class PatientController extends Controller
 
     if ($request->hasFile('profile_image')) {
         $request->validate(['profile_image' => 'nullable|image|max:5120']);
-        $uploadedFile = Cloudinary::upload($request->file('profile_image')->getRealPath());
+        $uploadedFile = Cloudinary::uploadFile($request->file('profile_image')->getPathname());
         $uploadedFileUrl = $uploadedFile->getSecurePath();
         $validated['profile_image'] = $uploadedFileUrl;
         $updatedFields[] = 'Profile Image';
