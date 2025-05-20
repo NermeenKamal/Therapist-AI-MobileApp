@@ -4,12 +4,31 @@ use App\Models\Patient;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\JsonResponse;
-use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 use Illuminate\Support\Facades\Log;
 use Exception;
+use Cloudinary\Cloudinary;
 
 class PatientController extends Controller
 {
+    /**
+     * تهيئة كائن Cloudinary
+     *
+     * @return Cloudinary
+     */
+    private function getCloudinary(): Cloudinary
+    {
+        return new Cloudinary([
+            'cloud' => [
+                'cloud_name' => config('services.cloudinary.cloud_name'),
+                'api_key' => config('services.cloudinary.api_key'),
+                'api_secret' => config('services.cloudinary.api_secret'),
+            ],
+            'url' => [
+                'secure' => true
+            ]
+        ]);
+    }
+
     public function updateProfile(Request $request): JsonResponse
     {
         // تسجيل المعلومات للتشخيص
@@ -69,34 +88,62 @@ class PatientController extends Controller
                     }
                     
                     try {
-                        // الرفع إلى Cloudinary مع مناولة الأخطاء بشكل صريح
-                        $uploadResult = Cloudinary::uploadFile($profileImage->getRealPath());
+                        // استخدام SDK الرسمي من Cloudinary
+                        $cloudinary = $this->getCloudinary();
                         
-                        if ($uploadResult && method_exists($uploadResult, 'getSecurePath')) {
-                            $uploadedFileUrl = $uploadResult->getSecurePath();
+                        // رفع الملف إلى Cloudinary
+                        $uploadResult = $cloudinary->uploadApi()->upload(
+                            $profileImage->getRealPath(),
+                            [
+                                'folder' => 'profile_images',
+                                'resource_type' => 'image'
+                            ]
+                        );
+                        
+                        // التحقق من نتيجة الرفع
+                        if ($uploadResult && isset($uploadResult['secure_url'])) {
+                            $uploadedFileUrl = $uploadResult['secure_url'];
                             $validated['profile_image'] = $uploadedFileUrl;
                             $updatedFields[] = 'Profile Image';
                             Log::info('File uploaded successfully', ['url' => $uploadedFileUrl]);
                         } else {
+                            Log::error('Invalid upload result', [
+                                'result_type' => gettype($uploadResult),
+                                'result' => $uploadResult
+                            ]);
                             throw new Exception('Invalid upload result from Cloudinary');
                         }
                     } catch (Exception $cloudinaryError) {
                         Log::error('Cloudinary upload error', [
                             'message' => $cloudinaryError->getMessage(),
                             'file' => $cloudinaryError->getFile(),
-                            'line' => $cloudinaryError->getLine()
+                            'line' => $cloudinaryError->getLine(),
+                            'trace' => $cloudinaryError->getTraceAsString()
                         ]);
                         
                         // حل بديل: احتفظ بالصورة محليًا إذا فشل Cloudinary
-                        // تعليق: يمكنك إضافة هذا الجزء إذا أردت تخزين الصور محليًا كحل بديل
-                        // $localPath = $profileImage->store('profile_images', 'public');
-                        // $validated['profile_image'] = asset('storage/' . $localPath);
-                        // $updatedFields[] = 'Profile Image (Local Storage)';
-                        
-                        return response()->json([
-                            'message' => 'Error uploading image to cloud storage',
-                            'error' => $cloudinaryError->getMessage()
-                        ], 500);
+                        try {
+                            $localPath = $profileImage->store('profile_images', 'public');
+                            $validated['profile_image'] = asset('storage/' . $localPath);
+                            $updatedFields[] = 'Profile Image (Local Storage)';
+                            Log::info('File stored locally as fallback', ['path' => $localPath]);
+                            
+                            // إعلام المستخدم بأن الصورة تم تخزينها محليًا
+                            return response()->json([
+                                'message' => 'Image stored locally due to cloud storage issue',
+                                'patient' => $patient->fresh(),
+                                'updated_fields' => $updatedFields
+                            ]);
+                        } catch (Exception $localStorageError) {
+                            Log::error('Local storage error', [
+                                'message' => $localStorageError->getMessage()
+                            ]);
+                            
+                            return response()->json([
+                                'message' => 'Error uploading image',
+                                'error' => 'Failed to store image in both cloud and local storage'
+                            ], 500);
+                        }
                     }
                 } else {
                     Log::warning('Invalid profile image file');
@@ -176,23 +223,20 @@ class PatientController extends Controller
      * @return bool
      */
     private function isCloudinaryConfigured(): bool
-{
-    $cloudName = config('cloudinary.cloud_name');
-    $apiKey = config('cloudinary.api_key');
-    $apiSecret = config('cloudinary.api_secret');
-    $cloudinaryUrl = config('cloudinary.url');
-    
-    // تسجيل معلومات التكوين للتشخيص (مع إخفاء المعلومات الحساسة)
-    Log::info('Cloudinary configuration check', [
-        'cloud_name_set' => !empty($cloudName),
-        'api_key_set' => !empty($apiKey),
-        'api_secret_set' => !empty($apiSecret),
-        'cloudinary_url_set' => !empty($cloudinaryUrl)
-    ]);
-    
-    return !empty($cloudName) && !empty($apiKey) && !empty($apiSecret);
-}
-
+    {
+        $cloudName = config('services.cloudinary.cloud_name');
+        $apiKey = config('services.cloudinary.api_key');
+        $apiSecret = config('services.cloudinary.api_secret');
+        
+        // تسجيل معلومات التكوين للتشخيص (مع إخفاء المعلومات الحساسة)
+        Log::info('Cloudinary configuration check', [
+            'cloud_name_set' => !empty($cloudName),
+            'api_key_set' => !empty($apiKey),
+            'api_secret_set' => !empty($apiSecret)
+        ]);
+        
+        return !empty($cloudName) && !empty($apiKey) && !empty($apiSecret);
+    }
 
     /**
      * عرض ملف المريض الشخصي
@@ -236,5 +280,24 @@ class PatientController extends Controller
         ];
         
         return response()->json($medicalHistory);
+    }
+    
+    /**
+     * اختبار تكوين Cloudinary
+     *
+     * @return JsonResponse
+     */
+    public function testCloudinaryConfig(): JsonResponse
+    {
+        $cloudName = config('services.cloudinary.cloud_name');
+        $apiKey = config('services.cloudinary.api_key');
+        $apiSecret = config('services.cloudinary.api_secret');
+        
+        return response()->json([
+            'cloud_name_set' => !empty($cloudName),
+            'api_key_set' => !empty($apiKey),
+            'api_secret_set' => !empty($apiSecret),
+            'all_set' => !empty($cloudName) && !empty($apiKey) && !empty($apiSecret)
+        ]);
     }
 }
