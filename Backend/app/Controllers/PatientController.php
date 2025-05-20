@@ -11,75 +11,134 @@ class PatientController extends Controller
 {
     public function updateProfile(Request $request): JsonResponse
     {
+        // تسجيل المعلومات للتشخيص
+        \Log::info('Update Profile Request', [
+            'has_files' => $request->hasFile('profile_image'),
+            'all_files' => $request->allFiles(),
+            'all_inputs' => $request->all(),
+        ]);
+
         $patient = Auth::user();
 
         if (!$patient) {
             return response()->json(['message' => 'There is no account for that patient'], 404);
         }
 
-        // Initialize the array properly
+        // تعريف المصفوفات بشكل صريح
         $updatedFields = [];
-
-        // نتحقق يدويًا من الحقول بدلاً من validate مباشرة
         $validated = [];
 
-        if ($request->has('name')) {
+        // معالجة الاسم إذا تم توفيره
+        if ($request->has('name') && $request->input('name') !== null) {
             $request->validate(['name' => 'nullable|string|max:255']);
             $validated['name'] = $request->input('name');
             $updatedFields[] = 'Name';
         }
 
-        // تحسين التعامل مع الملفات
+        // معالجة الصورة بطريقة أكثر أمانًا
         try {
-            if ($request->hasFile('profile_image')) {
-                $request->validate(['profile_image' => 'nullable|image|max:5120']);
+            // التحقق من وجود ملف بطرق متعددة
+            $hasFile = $request->hasFile('profile_image');
+            
+            if ($hasFile) {
+                \Log::info('Profile image file detected');
+                
+                // التحقق من صحة الملف
+                $request->validate(['profile_image' => 'image|max:5120']);
                 
                 $profileImage = $request->file('profile_image');
                 
-                // التحقق بشكل مفصل من صحة الملف
+                // فحص إضافي للملف
                 if ($profileImage && $profileImage->isValid()) {
-                    // الحصول على معلومات الملف للتصحيح
-                    $mime = $profileImage->getMimeType();
-                    $size = $profileImage->getSize();
-                    $originalName = $profileImage->getClientOriginalName();
+                    // معلومات الملف للتشخيص
+                    $fileInfo = [
+                        'mime' => $profileImage->getMimeType(),
+                        'size' => $profileImage->getSize(),
+                        'name' => $profileImage->getClientOriginalName()
+                    ];
+                    \Log::info('File information', $fileInfo);
                     
-                    // تنفيذ الرفع إلى Cloudinary
-                    $uploadedFile = Cloudinary::uploadFile($profileImage->getPathname());
-                    $uploadedFileUrl = $uploadedFile->getSecurePath();
-                    $validated['profile_image'] = $uploadedFileUrl;
-                    $updatedFields[] = 'Profile Image';
+                    // الرفع إلى Cloudinary
+                    $uploadResult = Cloudinary::uploadFile($profileImage->getRealPath());
+                    
+                    if ($uploadResult && method_exists($uploadResult, 'getSecurePath')) {
+                        $uploadedFileUrl = $uploadResult->getSecurePath();
+                        $validated['profile_image'] = $uploadedFileUrl;
+                        $updatedFields[] = 'Profile Image';
+                        \Log::info('File uploaded successfully', ['url' => $uploadedFileUrl]);
+                    } else {
+                        throw new \Exception('Invalid upload result from Cloudinary');
+                    }
                 } else {
-                    // رسالة خطأ إذا كان الملف غير صالح
+                    \Log::warning('Invalid profile image file');
                     return response()->json([
                         'message' => 'Invalid profile image file',
                         'details' => 'The uploaded file is invalid or corrupted'
                     ], 400);
                 }
-            } elseif ($request->has('profile_image')) {
-                // إذا تم تقديم profile_image ولكنه ليس ملفًا (مثل كائن JSON فارغ)
+            } else if ($request->has('profile_image')) {
+                // تعامل خاص مع المدخلات غير الصالحة
+                $profileImageInput = $request->input('profile_image');
+                
+                \Log::warning('Invalid profile_image input', [
+                    'type' => gettype($profileImageInput),
+                    'value' => $profileImageInput
+                ]);
+                
                 return response()->json([
                     'message' => 'Invalid profile image format',
-                    'details' => 'profile_image should be a file, not a JSON object',
-                    'tip' => 'When using Insomnia, select File type for the profile_image field'
+                    'details' => 'profile_image should be a file, not a JSON object or string',
+                    'received_type' => gettype($profileImageInput)
                 ], 400);
             }
         } catch (\Exception $e) {
-            // التقاط أي أخطاء أثناء معالجة الملف
+            // تسجيل معلومات الخطأ بالتفصيل
+            \Log::error('Profile image processing error', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
             return response()->json([
                 'message' => 'Error processing profile image',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
             ], 500);
         }
 
         if (!empty($validated)) {
-            $patient->update($validated);
+            try {
+                $patient->update($validated);
+                
+                \Log::info('Patient profile updated', [
+                    'patient_id' => $patient->id,
+                    'updated_fields' => $updatedFields
+                ]);
+            } catch (\Exception $e) {
+                \Log::error('Error updating patient profile', [
+                    'message' => $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine()
+                ]);
+                
+                return response()->json([
+                    'message' => 'Error updating profile',
+                    'error' => $e->getMessage()
+                ], 500);
+            }
         }
 
-        $message = count($updatedFields)
+        $message = !empty($updatedFields)
             ? 'Updated: ' . implode(' and ', $updatedFields)
             : 'No changes were made';
 
-        return response()->json(['message' => $message, 'patient' => $patient]);
+        return response()->json([
+            'message' => $message, 
+            'patient' => $patient,
+            'updated_fields' => $updatedFields
+        ]);
     }
 
     /**
