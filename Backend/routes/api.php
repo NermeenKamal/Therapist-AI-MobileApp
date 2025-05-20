@@ -37,6 +37,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/appointments/book/{id}', [AppointmentController::class, 'bookAvailableAppointment']);
     Route::get('/appointments/doctor/{doctorId}/available', [AppointmentController::class, 'availableForDoctor']);
 
+    // Patient 
+    Route::put('/patient/profile', [PatientController::class, 'updateProfile']);
+    Route::get('/patient/profile', [PatientController::class, 'showProfile']);
+    
     // Chat - نظام المحادثات المُحسَّن مع Firebase
     Route::post('chat/send', [ChatController::class, 'sendMessage']);
     Route::get('chat/appointment/{appointmentId}', [ChatController::class, 'getMessages']);
