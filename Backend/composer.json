@@ -9,7 +9,7 @@
     "require": {
         "php": "^8.2",
         "ext-pdo": "*",
-        "cloudinary-labs/cloudinary-laravel": "^3.0",
+       "cloudinary/cloudinary_php": "^3.1",
         "doctrine/dbal": "^4.2",
         "guzzlehttp/guzzle": "^7.9",
         "illuminate/log": "*",
