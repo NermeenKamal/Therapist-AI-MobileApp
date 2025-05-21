@@ -100,6 +100,41 @@ class AppointmentController extends Controller
         return response()->json($appointment->load('doctor'));
     }
 
+    // الدكتور يؤكد الحجز
+public function confirm(Request $request, int $id): JsonResponse
+{
+    $appointment = Appointment::findOrFail($id);
+    $this->authorize('confirm', $appointment);
+
+    if ($appointment->status !== Appointment::STATUS_PENDING) {
+        return response()->json(['message' => 'Only pending appointments can be confirmed.'], 400);
+    }
+
+    $appointment->update([
+        'status' => Appointment::STATUS_CONFIRMED,
+    ]);
+
+    // إشعار للمريض
+    try {
+        if ($appointment->patient && $appointment->patient->fcm_token) {
+            $this->fcm->sendToUser(
+                $appointment->patient->fcm_token,
+                'Appointment confirmed',
+                'Your appointment has been confirmed by the doctor.',
+                ['appointment_id' => $appointment->id]
+            );
+        }
+    } catch (\Exception $e) {
+        Log::warning('FCM notification failed in confirm: ' . $e->getMessage(), [
+            'appointment_id' => $appointment->id,
+            'user_id' => Auth::id()
+        ]);
+    }
+
+    return response()->json($appointment);
+}
+
+
     // تعديل موعد (تاريخ/ملاحظات)
     public function update(Request $request, int $id): JsonResponse
     {
