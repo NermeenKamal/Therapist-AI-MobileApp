@@ -6,6 +6,8 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use App\Services\FCMService;
+use App\Models\Doctor;
+use App\Models\Patient;
 
 class FCMController extends Controller
 {
@@ -25,48 +27,42 @@ class FCMController extends Controller
     public function updateToken(Request $request): JsonResponse
     {
         $request->validate([
-            'fcm_token' => 'required|string'
+            'fcm_token' => 'required|string',
+            'user_type' => 'required|in:doctor,patient',
+            'user_id' => 'required|integer'
         ]);
         
-        $user = Auth::user();
-        $userType = $user->role;
+        $userType = $request->input('user_type');
+        $userId = $request->input('user_id');
         $fcmToken = $request->input('fcm_token');
         
         // تحديث رمز FCM حسب نوع المستخدم (دكتور أو مريض)
         if ($userType === 'doctor') {
-            $doctor = $user->doctor; // بافتراض وجود علاقة بين نموذج المستخدم والدكتور
+            $doctor = Doctor::find($userId);
             
             // التحقق من وجود سجل الطبيب
             if (!$doctor) {
-                // إنشاء سجل جديد للطبيب أو إعادة رسالة خطأ
                 return response()->json([
                     'success' => false,
-                    'message' => 'لم يتم العثور على سجل الطبيب المرتبط بهذا الحساب'
+                    'message' => 'لم يتم العثور على سجل الطبيب'
                 ], 404);
             }
             
             $doctor->fcm_token = $fcmToken;
             $doctor->save();
         } else if ($userType === 'patient') {
-            $patient = $user->patient; // بافتراض وجود علاقة بين نموذج المستخدم والمريض
+            $patient = Patient::find($userId);
             
             // التحقق من وجود سجل المريض
             if (!$patient) {
-                // إنشاء سجل جديد للمريض أو إعادة رسالة خطأ
                 return response()->json([
                     'success' => false,
-                    'message' => 'لم يتم العثور على سجل المريض المرتبط بهذا الحساب'
+                    'message' => 'لم يتم العثور على سجل المريض'
                 ], 404);
             }
             
             $patient->fcm_token = $fcmToken;
             $patient->save();
-        } else {
-            // في حالة كان نوع المستخدم غير معروف
-            return response()->json([
-                'success' => false,
-                'message' => 'نوع المستخدم غير صالح'
-            ], 400);
         }
         
         return response()->json([
@@ -85,37 +81,34 @@ class FCMController extends Controller
     {
         $request->validate([
             'topic' => 'required|string',
+            'user_type' => 'required|in:doctor,patient',
+            'user_id' => 'required|integer'
         ]);
         
-        $user = Auth::user();
-        $userType = $user->role;
+        $userType = $request->input('user_type');
+        $userId = $request->input('user_id');
         $topic = $request->input('topic');
         $fcmToken = null;
         
         // الحصول على رمز FCM للمستخدم الحالي
         if ($userType === 'doctor') {
-            $doctor = $user->doctor;
+            $doctor = Doctor::find($userId);
             if (!$doctor) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'لم يتم العثور على سجل الطبيب المرتبط بهذا الحساب'
+                    'message' => 'لم يتم العثور على سجل الطبيب'
                 ], 404);
             }
             $fcmToken = $doctor->fcm_token;
         } else if ($userType === 'patient') {
-            $patient = $user->patient;
+            $patient = Patient::find($userId);
             if (!$patient) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'لم يتم العثور على سجل المريض المرتبط بهذا الحساب'
+                    'message' => 'لم يتم العثور على سجل المريض'
                 ], 404);
             }
             $fcmToken = $patient->fcm_token;
-        } else {
-            return response()->json([
-                'success' => false,
-                'message' => 'نوع المستخدم غير صالح'
-            ], 400);
         }
         
         if (!$fcmToken) {
