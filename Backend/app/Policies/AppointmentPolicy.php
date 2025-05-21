@@ -26,7 +26,7 @@ class AppointmentPolicy
         return $user->id === $appointment->doctor_id;
     }
 
-    public function confirm(User $user, Appointment $appointment): bool
+    public function confirm(Authenticatable $user, Appointment $appointment): bool
     {
         // فقط الدكتور صاحب الموعد يقدر يؤكد
         return $user->id === $appointment->doctor_id;
