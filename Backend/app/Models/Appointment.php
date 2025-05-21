@@ -16,6 +16,7 @@ class Appointment extends Model
     public const STATUS_BOOKED = 'booked';
     public const STATUS_CANCELED = 'canceled';
     public const STATUS_PENDING = 'pending';
+    public const STATUS_CONFIRMED = 'confirmed';
 
     protected $fillable = [
         'patient_id',
