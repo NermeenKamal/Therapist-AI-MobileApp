@@ -44,7 +44,7 @@ class FCMController extends Controller
             if (!$doctor) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'لم يتم العثور على سجل الطبيب'
+                    'message' => 'No doctor record found'
                 ], 404);
             }
             
@@ -57,7 +57,7 @@ class FCMController extends Controller
             if (!$patient) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'لم يتم العثور على سجل المريض'
+                    'message' => 'No patient record found'
                 ], 404);
             }
             
@@ -67,7 +67,7 @@ class FCMController extends Controller
         
         return response()->json([
             'success' => true,
-            'message' => 'تم تحديث رمز FCM بنجاح'
+            'message' => 'FCM token updated successfully'
         ]);
     }
     
@@ -96,7 +96,7 @@ class FCMController extends Controller
             if (!$doctor) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'لم يتم العثور على سجل الطبيب'
+                    'message' => 'No doctor record found'
                 ], 404);
             }
             $fcmToken = $doctor->fcm_token;
@@ -105,7 +105,7 @@ class FCMController extends Controller
             if (!$patient) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'لم يتم العثور على سجل المريض'
+                    'message' => 'No patient record found'
                 ], 404);
             }
             $fcmToken = $patient->fcm_token;
@@ -114,7 +114,7 @@ class FCMController extends Controller
         if (!$fcmToken) {
             return response()->json([
                 'success' => false,
-                'message' => 'لم يتم العثور على رمز FCM للمستخدم'
+                'message' => 'No FCM token found for the user'
             ], 400);
         }
         
