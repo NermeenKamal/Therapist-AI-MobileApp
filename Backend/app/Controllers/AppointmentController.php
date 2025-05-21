@@ -9,6 +9,7 @@ use App\Services\FCMService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class AppointmentController extends Controller
 {
@@ -77,14 +78,23 @@ class AppointmentController extends Controller
             'status'     => Appointment::STATUS_PENDING,
         ]);
 
-        // إشعار للدكتور
-        if ($token = $appointment->doctor->fcm_token) {
-            $this->fcm->sendToUser(
-                $token,
-                'New appointment booked',
-                'Appointment booked by: ' . Auth::user()->name,
-                ['appointment_id' => $appointment->id]
-            );
+        // إشعار للدكتور - مع حماية من أخطاء Firebase
+        try {
+            if ($appointment->doctor && $appointment->doctor->fcm_token) {
+                $this->fcm->sendToUser(
+                    $appointment->doctor->fcm_token,
+                    'New appointment booked',
+                    'Appointment booked by: ' . Auth::user()->name,
+                    ['appointment_id' => $appointment->id]
+                );
+            }
+        } catch (\Exception $e) {
+            // تسجيل الخطأ بدون إيقاف العملية
+            Log::warning('FCM notification failed in bookAvailableAppointment: ' . $e->getMessage(), [
+                'appointment_id' => $appointment->id,
+                'doctor_id' => $appointment->doctor_id,
+                'patient_id' => Auth::id()
+            ]);
         }
 
         return response()->json($appointment->load('doctor'));
@@ -104,18 +114,25 @@ class AppointmentController extends Controller
 
         $appointment->update($data);
 
-        // إشعار للطرف الآخر
-        $other = $appointment->patient_id === Auth::id()
-            ? $appointment->doctor
-            : $appointment->patient;
+        // إشعار للطرف الآخر - مع حماية من أخطاء Firebase
+        try {
+            $other = $appointment->patient_id === Auth::id()
+                ? $appointment->doctor
+                : $appointment->patient;
 
-        if ($other && $other->fcm_token) {
-            $this->fcm->sendToUser(
-                $other->fcm_token,
-                'Appointment edited',
-                'Appointment edited number: ' . $appointment->id,
-                ['appointment_id' => $appointment->id]
-            );
+            if ($other && $other->fcm_token) {
+                $this->fcm->sendToUser(
+                    $other->fcm_token,
+                    'Appointment edited',
+                    'Appointment edited number: ' . $appointment->id,
+                    ['appointment_id' => $appointment->id]
+                );
+            }
+        } catch (\Exception $e) {
+            Log::warning('FCM notification failed in update: ' . $e->getMessage(), [
+                'appointment_id' => $appointment->id,
+                'user_id' => Auth::id()
+            ]);
         }
 
         return response()->json($appointment);
@@ -132,17 +149,25 @@ class AppointmentController extends Controller
             'canceled_by' => Auth::id(),
         ]);
 
-        $other = $appointment->patient_id === Auth::id()
-            ? $appointment->doctor
-            : $appointment->patient;
+        // إشعار للطرف الآخر - مع حماية من أخطاء Firebase
+        try {
+            $other = $appointment->patient_id === Auth::id()
+                ? $appointment->doctor
+                : $appointment->patient;
 
-        if ($other && $other->fcm_token) {
-            $this->fcm->sendToUser(
-                $other->fcm_token,
-                'Appointment canceled',
-                'Appointment canceled number: ' . $appointment->id,
-                ['appointment_id' => $appointment->id]
-            );
+            if ($other && $other->fcm_token) {
+                $this->fcm->sendToUser(
+                    $other->fcm_token,
+                    'Appointment canceled',
+                    'Appointment canceled number: ' . $appointment->id,
+                    ['appointment_id' => $appointment->id]
+                );
+            }
+        } catch (\Exception $e) {
+            Log::warning('FCM notification failed in cancel: ' . $e->getMessage(), [
+                'appointment_id' => $appointment->id,
+                'user_id' => Auth::id()
+            ]);
         }
 
         return response()->json($appointment);
