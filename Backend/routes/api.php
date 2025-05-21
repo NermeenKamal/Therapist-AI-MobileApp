@@ -36,6 +36,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/appointments/{id}', [AppointmentController::class, 'update']);
     Route::post('/appointments/available', [AppointmentController::class, 'createAvailableAppointment']);
     Route::post('/appointments/book/{id}', [AppointmentController::class, 'bookAvailableAppointment']);
+    Route::post('/appointments/{id}/confirm', [AppointmentController::class, 'confirm']);
     Route::get('/appointments/doctor/{doctorId}/available', [AppointmentController::class, 'availableForDoctor']);
 
     // Patient 
