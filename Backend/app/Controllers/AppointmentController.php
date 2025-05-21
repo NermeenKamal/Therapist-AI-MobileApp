@@ -111,7 +111,7 @@ public function confirm(Request $request, int $id): JsonResponse
     }
 
     $appointment->update([
-        'status' => Appointment::STATUS_CONFIRMED,
+        'status' => Appointment::STATUS_BOOKED,
     ]);
 
     // إشعار للمريض
