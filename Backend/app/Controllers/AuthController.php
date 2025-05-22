@@ -466,4 +466,33 @@ class AuthController extends Controller
             ], 500);
         }
     }
+
+
+
+
+public function checkAccess(Request $request): JsonResponse
+{
+    $user = $request->user();
+
+    if (!$user) {
+        return response()->json(['message' => 'Unauthenticated'], 401);
+    }
+
+    if (!$user->email_verified) {
+        return response()->json([
+            'message' => 'Your email address is not verified. Please verify your email to continue.',
+            'status' => 'email_not_verified'
+        ], 403);
+    }
+
+    if ($user instanceof \App\Models\Doctor && !$user->isLicenseVerified()) {
+        return response()->json([
+            'message' => 'Your license is pending verification by the Ministry of Health',
+            'status' => 'license_not_verified'
+        ], 403);
+    }
+
+    return response()->json(['message' => 'Access granted!']);
+}
+
 }
