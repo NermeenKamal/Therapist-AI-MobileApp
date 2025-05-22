@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
-# Optional: Arabic traineddata (in case it's not copied)
+# Install tesseract language packs
 RUN apt-get update && apt-get install -y tesseract-ocr-ara tesseract-ocr-eng && rm -rf /var/lib/apt/lists/*
 
 # Install PHP extensions
@@ -42,8 +42,14 @@ WORKDIR /var/www
 # Copy project files
 COPY . .
 
-# Copy tessdata files into the container (relative to /var/www)
+# Copy tessdata files and ensure proper permissions
+RUN mkdir -p /var/www/tessdata/
 COPY tessdata/ /var/www/tessdata/
+# Also copy to system location as backup
+RUN cp -r /var/www/tessdata/* /usr/share/tesseract-ocr/4.00/tessdata/ || true
+
+# Set default Tesseract path (will be overridden by Railway env var)
+ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/4.00/tessdata/
 
 # Install Laravel dependencies
 RUN composer install --no-interaction --optimize-autoloader
@@ -55,8 +61,7 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 # Install Puppeteer dependencies
 RUN npm install puppeteer
 
-# Set path for Tesseract language files
-ENV TESSDATA_PREFIX=/var/www/tessdata/
+
 
 # Set proper permissions
 RUN chown -R www-data:www-data /var/www && \
