@@ -1,4 +1,4 @@
-FROM php:8.2-fpm
+FROM php:8.2-cli
 
 # تثبيت الأدوات والمكتبات المطلوبة
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -41,3 +41,9 @@ RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
 
 # تعيين المستخدم
 USER www-data
+
+
+
+
+CMD ["sh", "-c", "php artisan serve --host=0.0.0.0 --port=$PORT"]
+
