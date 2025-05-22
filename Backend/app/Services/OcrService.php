@@ -21,7 +21,8 @@ class OcrService
 
         // تهيئة Tesseract OCR
         $ocr = new TesseractOCR($fullPath);
-        $ocr->lang('ara', 'eng'); // دعم العربية والإنجليزية
+        // $ocr->lang('ara', 'eng'); // دعم العربية والإنجليزية
+        $ocr->lang('eng');
 
         // إزالة configFile('hocr') مؤقتًا لأنه يسبب تعليق
         // $ocr->configFile('hocr');
