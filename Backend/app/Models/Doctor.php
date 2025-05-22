@@ -2,16 +2,14 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Doctor extends Authenticatable
 {
-    use HasApiTokens, Notifiable, HasFactory;
-
-    protected $table = 'doctors';
+    use HasApiTokens, HasFactory, Notifiable;
 
     protected $fillable = [
         'name',
@@ -19,14 +17,16 @@ class Doctor extends Authenticatable
         'password',
         'mobile_number',
         'national_id',
+        'license_number',
         'specialization',
+        'medical_license_path',
         'bio',
         'session_price',
-        'medical_license_path',
         'profile_image',
         'fcm_token',
-        'is_verified_by_ocr',
-        'clinic_address'
+        'clinic_address',
+        'email_verified',
+        'is_verified_by_ocr'
     ];
 
     protected $hidden = [
@@ -35,19 +35,63 @@ class Doctor extends Authenticatable
     ];
 
     protected $casts = [
-        'session_price' => 'decimal:2',
-        'is_verified_by_ocr' => 'boolean',
         'email_verified_at' => 'datetime',
+        'password' => 'hashed',
+        'email_verified' => 'boolean',
+        'is_verified_by_ocr' => 'boolean',
+        'session_price' => 'decimal:2'
     ];
 
-    public function appointments()
+    /**
+     * التحقق من أن الطبيب مُفعل بالكامل
+     */
+    public function isFullyVerified(): bool
     {
-        return $this->hasMany(Appointment::class, 'doctor_id');
-    }
-    
-    public function getRoleAttribute()
-    {
-        return 'doctor';
+        return $this->email_verified && $this->isLicenseVerified();
     }
 
-} 
+    /**
+     * التحقق من صحة الترخيص
+     */
+    public function isLicenseVerified(): bool
+    {
+        $licensedDoctor = LicensedDoctor::where('email', $this->email)
+                                       ->where('license_number', $this->license_number)
+                                       ->where('verified', true)
+                                       ->first();
+        
+        return $licensedDoctor !== null;
+    }
+
+    /**
+     * الحصول على بيانات الترخيص
+     */
+    public function licensedDoctor()
+    {
+        return $this->hasOne(LicensedDoctor::class, 'email', 'email');
+    }
+
+    /**
+     * المواعيد الخاصة بالطبيب
+     */
+    public function appointments()
+    {
+        return $this->hasMany(Appointment::class);
+    }
+
+    /**
+     * جدولة الطبيب
+     */
+    public function schedules()
+    {
+        return $this->hasMany(DoctorSchedule::class);
+    }
+
+    /**
+     * المقالات التي كتبها الطبيب
+     */
+    public function articles()
+    {
+        return $this->hasMany(Article::class);
+    }
+}
