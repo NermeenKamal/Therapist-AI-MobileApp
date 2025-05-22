@@ -73,7 +73,7 @@ class OcrController extends Controller
      * التحقق من البيانات المستخرجة مع البيانات المدخلة
      * هذا الـ method يجب أن يكون محمي بـ auth middleware
      */
-    public function verifyExtractedData(Request $request): JsonResponse
+   public function verifyExtractedData(Request $request): JsonResponse
 {
     $validator = Validator::make($request->all(), [
         'extracted_name' => 'required|string',
@@ -81,7 +81,6 @@ class OcrController extends Controller
         'input_name' => 'required|string',
         'input_id' => 'required|string',
         'email' => 'required|email'
-        // حذف متطلب verification_token
     ]);
 
     if ($validator->fails()) {
@@ -107,10 +106,67 @@ class OcrController extends Controller
             ], 403);
         }
 
-        // باقي منطق التحقق من OCR كما هو
-        // ...
+        // التحقق من الهوية الوطنية
+        $idVerified = $this->ocrService->verifyNationalId(
+            $request->extracted_id, 
+            $request->input_id
+        );
+
+        // التحقق من الاسم
+        $nameVerified = $this->ocrService->verifyName(
+            $request->extracted_name, 
+            $request->input_name
+        );
+
+        $overallVerified = $idVerified && $nameVerified;
+
+        // تحديث حالة التحقق إذا نجحت العملية
+        if ($overallVerified) {
+            $previousStatus = $doctor->is_verified_by_ocr;
+            
+            $doctor->update([
+                'is_verified_by_ocr' => true,
+                'ocr_verified_at' => now()
+            ]);
+
+            // إعادة تحميل المستخدم للتأكد من التحديث
+            $doctor->refresh();
+
+            // التحقق من أن التحديث تم بنجاح
+            if (!$doctor->is_verified_by_ocr) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to update verification status'
+                ], 500);
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'verification' => [
+                'id_verified' => $idVerified,
+                'name_verified' => $nameVerified,
+                'overall_verified' => $overallVerified
+            ],
+            'user_status' => [
+                'is_verified_by_ocr' => $doctor->is_verified_by_ocr,
+                'email_verified' => $doctor->email_verified
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('OCR verification failed:', [
+            'email' => $request->email,
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Verification failed',
+            'error' => app()->environment('local') ? $e->getMessage() : 'Processing failed'
+        ], 500);
     }
-    // ...
 }
 
     /**
