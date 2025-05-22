@@ -1,22 +1,15 @@
-# Start from PHP base image
+# استخدم صورة PHP الأساسية
 FROM php:8.2-cli
 
-# Set working directory early
-WORKDIR /var/www
+# استخدم env لإيقاف interactivity
+ENV DEBIAN_FRONTEND=noninteractive
 
-# Install basic system dependencies (split + optimized)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    unzip \
-    git \
-    curl && \
-    rm -rf /var/lib/apt/lists/*
+# تحديث النظام وتثبيت الأساسيات على دفعات صغيرة لتقليل الاستهلاك
+RUN apt-get update && apt-get install -y --no-install-recommends unzip && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends curl zip sqlite3 && rm -rf /var/lib/apt/lists/*
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    zip \
-    sqlite3 && \
-    rm -rf /var/lib/apt/lists/*
-
-# Install development libraries
+# تثبيت المكتبات الخاصة بـ Laravel & GD & Zip
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libzip-dev \
     libpng-dev \
@@ -24,75 +17,61 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxml2-dev \
     libsqlite3-dev \
     libsodium-dev \
-    pkg-config && \
-    rm -rf /var/lib/apt/lists/*
+    pkg-config \
+    && docker-php-ext-install pdo pdo_mysql zip gd mbstring xml fileinfo sodium \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install Node.js and npm (split for clarity)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    nodejs && \
-    apt-get install -y --no-install-recommends \
-    npm && \
-    rm -rf /var/lib/apt/lists/*
-
-# Install Tesseract
+# تهيئة Tesseract و ImageMagick
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
-    libtesseract-dev && \
-    rm -rf /var/lib/apt/lists/*
-
-# Install Tesseract language packs
-RUN apt-get update && apt-get install -y --no-install-recommends \
+    libtesseract-dev \
     tesseract-ocr-ara \
-    tesseract-ocr-eng && \
-    rm -rf /var/lib/apt/lists/*
-
-# Install ImageMagick
-RUN apt-get update && apt-get install -y --no-install-recommends \
+    tesseract-ocr-eng \
     imagemagick \
-    libmagickwand-dev && \
-    rm -rf /var/lib/apt/lists/*
+    libmagickwand-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install Chromium (headless browser)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    chromium && \
-    rm -rf /var/lib/apt/lists/*
-
-# Install PHP extensions
-RUN docker-php-ext-install pdo pdo_mysql zip gd mbstring xml fileinfo sodium
-
-# Install imagick extension
+# تفعيل imagick extension
 RUN pecl install imagick && docker-php-ext-enable imagick
 
-# Add Composer from official image
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+# تثبيت Node.js و npm
+RUN apt-get update && apt-get install -y --no-install-recommends nodejs npm && rm -rf /var/lib/apt/lists/*
 
-# Copy project files
-COPY . .
-
-# Copy tessdata and ensure permissions
-RUN mkdir -p /var/www/tessdata/
-COPY tessdata/ /var/www/tessdata/
-RUN cp -r /var/www/tessdata/* /usr/share/tesseract-ocr/4.00/tessdata/ || true
-
-# Set default Tesseract path
-ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/4.00/tessdata/
-
-# Install Laravel dependencies
-RUN composer install --no-interaction --optimize-autoloader
-
-# Puppeteer Chromium configuration
+# تثبيت Puppeteer فقط بدون Chromium (هتشغل النظامي)
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
-# Install Puppeteer
+# تثبيت Chromium لاستخدام Puppeteer
+RUN apt-get update && apt-get install -y --no-install-recommends chromium && rm -rf /var/lib/apt/lists/*
+
+# نسخ Composer من صورة رسمية (أسرع وأخف)
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+# تعيين مجلد العمل
+WORKDIR /var/www
+
+# نسخ ملفات المشروع (بدون tessdata لو مش موجود)
+COPY . .
+
+# فقط انسخ tessdata لو موجود (خطوة اختيارية)
+RUN mkdir -p /var/www/tessdata
+RUN [ -d "./tessdata" ] && cp -r ./tessdata/* /usr/share/tesseract-ocr/4.00/tessdata/ || echo "no tessdata found"
+
+# تعيين مسار tessdata في البيئة
+ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/4.00/tessdata/
+
+# تثبيت Laravel dependencies
+RUN composer install --no-interaction --optimize-autoloader
+
+# تثبيت Puppeteer
 RUN npm install puppeteer
 
-# Permissions
+# إعطاء صلاحيات التخزين والتخزين المؤقت
 RUN chown -R www-data:www-data /var/www && \
     chmod -R 755 /var/www/storage /var/www/bootstrap/cache
 
-# Expose Laravel port
+# فتح المنفذ
 EXPOSE 8000
 
-# Start Laravel
+# أمر التشغيل الأساسي للـ Railway
 CMD ["sh", "-c", "php artisan serve --host=0.0.0.0 --port=$PORT"]
