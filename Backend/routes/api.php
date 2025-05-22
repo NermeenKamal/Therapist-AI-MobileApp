@@ -27,6 +27,8 @@ Route::post('auth/register-patient', [AuthController::class, 'registerPatient'])
 Route::post('auth/register-doctor', [AuthController::class, 'registerDoctor']);
 Route::post('auth/login', [AuthController::class, 'login']);
 
+Route::middleware('auth:sanctum')->get('/check-access', [AuthController::class, 'checkAccess']);
+
 // Email Verification Routes - جديدة
 Route::post('auth/verify-email', [AuthController::class, 'verifyEmail']);
 Route::post('auth/resend-verification-code', [AuthController::class, 'resendVerificationCode']);
