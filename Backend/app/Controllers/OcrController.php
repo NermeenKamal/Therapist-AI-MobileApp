@@ -74,136 +74,106 @@ class OcrController extends Controller
      * هذا الـ method يجب أن يكون محمي بـ auth middleware
      */
     public function verifyExtractedData(Request $request): JsonResponse
-    {
-        // التحقق من المصادقة
-        if (!$request->user()) {
-            Log::warning('OCR verification attempt without authentication');
+{
+    $validator = Validator::make($request->all(), [
+        'extracted_name' => 'required|string',
+        'extracted_id' => 'required|string',
+        'input_name' => 'required|string',
+        'input_id' => 'required|string',
+        'email' => 'required|email',
+        'verification_token' => 'required|string'
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json(['errors' => $validator->errors()], 422);
+    }
+
+    try {
+        // التحقق من صحة رمز التحقق والبريد الإلكتروني
+        $emailService = new \App\Services\EmailVerificationService();
+        $tokenValid = $emailService->verifyOcrToken($request->email, $request->verification_token);
+        
+        if (!$tokenValid) {
             return response()->json([
                 'success' => false,
-                'message' => 'Authentication required'
+                'message' => 'Invalid verification token'
             ], 401);
         }
-
-        $validator = Validator::make($request->all(), [
-            'extracted_name' => 'required|string',
-            'extracted_id' => 'required|string',
-            'input_name' => 'required|string',
-            'input_id' => 'required|string'
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
+        
+        // البحث عن الدكتور بالبريد الإلكتروني
+        $doctor = Doctor::where('email', $request->email)->first();
+        
+        if (!$doctor) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Doctor not found'
+            ], 404);
+        }
+        
+        // التحقق من أن البريد الإلكتروني مفعل
+        if (!$doctor->email_verified) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please verify your email first'
+            ], 403);
         }
 
-        try {
-            $user = $request->user();
+        // التحقق من الهوية الوطنية
+        $idVerified = $this->ocrService->verifyNationalId(
+            $request->extracted_id, 
+            $request->input_id
+        );
+
+        // التحقق من الاسم
+        $nameVerified = $this->ocrService->verifyName(
+            $request->extracted_name, 
+            $request->input_name
+        );
+
+        $overallVerified = $idVerified && $nameVerified;
+
+        // تحديث حالة التحقق إذا نجحت العملية
+        if ($overallVerified) {
+            $previousStatus = $doctor->is_verified_by_ocr;
             
-            Log::info('OCR verification started:', [
-                'user_id' => $user->id,
-                'user_email' => $user->email,
-                'user_type' => get_class($user),
-                'extracted_name' => $request->extracted_name,
-                'extracted_id' => $request->extracted_id,
-                'input_name' => $request->input_name,
-                'input_id' => $request->input_id
+            $doctor->update([
+                'is_verified_by_ocr' => true,
+                'ocr_verified_at' => now()
             ]);
 
-            // التحقق من أن المستخدم دكتور
-            if (!($user instanceof Doctor)) {
-                Log::warning('OCR verification attempted by non-doctor user:', [
-                    'user_id' => $user->id,
-                    'user_type' => get_class($user)
-                ]);
-                
+            // إعادة تحميل المستخدم للتأكد من التحديث
+            $doctor->refresh();
+
+            // التحقق من أن التحديث تم بنجاح
+            if (!$doctor->is_verified_by_ocr) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'OCR verification is only available for doctors'
-                ], 403);
+                    'message' => 'Failed to update verification status'
+                ], 500);
             }
+        }
 
-            // التحقق من الهوية الوطنية
-            $idVerified = $this->ocrService->verifyNationalId(
-                $request->extracted_id, 
-                $request->input_id
-            );
-
-            // التحقق من الاسم
-            $nameVerified = $this->ocrService->verifyName(
-                $request->extracted_name, 
-                $request->input_name
-            );
-
-            $overallVerified = $idVerified && $nameVerified;
-
-            Log::info('OCR verification results:', [
-                'user_id' => $user->id,
+        return response()->json([
+            'success' => true,
+            'verification' => [
                 'id_verified' => $idVerified,
                 'name_verified' => $nameVerified,
                 'overall_verified' => $overallVerified
-            ]);
+            ],
+            'user_status' => [
+                'is_verified_by_ocr' => $doctor->is_verified_by_ocr,
+                'email_verified' => $doctor->email_verified
+            ]
+        ]);
 
-            // تحديث حالة التحقق إذا نجحت العملية
-            if ($overallVerified) {
-                $previousStatus = $user->is_verified_by_ocr;
-                
-                $user->update([
-                    'is_verified_by_ocr' => true,
-                    'ocr_verified_at' => now()
-                ]);
-
-                // إعادة تحميل المستخدم للتأكد من التحديث
-                $user->refresh();
-
-                Log::info('Doctor OCR verification status updated:', [
-                    'doctor_id' => $user->id,
-                    'email' => $user->email,
-                    'previous_status' => $previousStatus,
-                    'new_status' => $user->is_verified_by_ocr,
-                    'verified_at' => $user->ocr_verified_at
-                ]);
-
-                // التحقق من أن التحديث تم بنجاح
-                if (!$user->is_verified_by_ocr) {
-                    Log::error('Failed to update OCR verification status:', [
-                        'doctor_id' => $user->id,
-                        'email' => $user->email
-                    ]);
-                    
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Failed to update verification status'
-                    ], 500);
-                }
-            }
-
-            return response()->json([
-                'success' => true,
-                'verification' => [
-                    'id_verified' => $idVerified,
-                    'name_verified' => $nameVerified,
-                    'overall_verified' => $overallVerified
-                ],
-                'user_status' => [
-                    'is_verified_by_ocr' => $user->is_verified_by_ocr,
-                    'email_verified' => $user->email_verified
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('OCR verification failed:', [
-                'user_id' => $request->user()?->id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Verification failed',
-                'error' => app()->environment('local') ? $e->getMessage() : 'Processing failed'
-            ], 500);
-        }
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Verification failed',
+            'error' => app()->environment('local') ? $e->getMessage() : 'Processing failed'
+        ], 500);
     }
-
+}
     /**
      * التحقق من حالة التحقق الحالية للمستخدم
      */
