@@ -26,7 +26,8 @@ class Patient extends Authenticatable
         'emergency_contact_number',
         'profile_image',
         'fcm_token',
-        'email_verified'
+        'email_verified',
+        'email_verified_at'
     ];
 
     protected $hidden = [
