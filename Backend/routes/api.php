@@ -39,6 +39,8 @@ Route::post('ocr/verify-extracted-data', [OcrController::class, 'verifyExtracted
 
 Route::post('auth/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
 
+Route::post('auth/resend-verification-code', [AuthController::class, 'resendVerificationCode']);
+
 Route::middleware('auth:sanctum')->group(function () {
     // Appointment routes
     Route::get('appointments', [AppointmentController::class, 'index']);
