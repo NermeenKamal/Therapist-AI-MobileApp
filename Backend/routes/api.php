@@ -27,11 +27,11 @@ Route::post('auth/register-patient', [AuthController::class, 'registerPatient'])
 Route::post('auth/register-doctor', [AuthController::class, 'registerDoctor']);
 Route::post('auth/login', [AuthController::class, 'login'])->name('login');
 
-// Email Verification Routes
+// Email Verification Routes (Public)
 Route::post('auth/verify-email', [AuthController::class, 'verifyEmail']);
 Route::post('auth/resend-verification-code', [AuthController::class, 'resendVerificationCode']);
 
-// OCR Routes - extract data فقط public
+// OCR Routes - extract data only (Public for registration flow)
 Route::post('ocr/extract-id-data', [OcrController::class, 'extractIdData']);
 
 // Protected Routes
@@ -40,8 +40,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/check-access', [AuthController::class, 'checkAccess']);
     Route::post('auth/logout', [AuthController::class, 'logout']);
 
-    // OCR Routes - verification محمي بـ auth
+    // OCR Routes (Protected - requires authentication)
     Route::post('ocr/verify-extracted-data', [OcrController::class, 'verifyExtractedData']);
+    Route::get('ocr/verification-status', [OcrController::class, 'getVerificationStatus']);
 
     // Appointment routes
     Route::get('appointments', [AppointmentController::class, 'index']);
@@ -54,7 +55,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/appointments/{id}/confirm', [AppointmentController::class, 'confirm']);
     Route::get('/appointments/doctor/{doctorId}/available', [AppointmentController::class, 'availableForDoctor']);
 
-    // Patient 
+    // Patient Routes
     Route::post('/patient/profile', [PatientController::class, 'updateProfile']);
     Route::get('/patient/profile', [PatientController::class, 'showProfile']);
     
@@ -89,22 +90,44 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/doctor/schedule/{id}', [DoctorScheduleController::class, 'update']);
     Route::delete('/doctor/schedule/{id}', [DoctorScheduleController::class, 'destroy']);
 
-    // Doctor
+    // Doctor Routes
     Route::post('/doctor/update-profile', [DoctorController::class, 'updateProfile']);
-
-    // عرض كل الدكاترة مع فلترة التخصص
     Route::get('/doctors', [DoctorController::class, 'index']);
-    // تفاصيل دكتور واحد
     Route::get('/doctors/{id}', [DoctorController::class, 'show']);
 
     // Article Routes
     Route::get('/articles', [ArticleController::class, 'index']);
 });
 
-// Test Routes (remove in production)
+// Debug Routes (remove in production)
 if (app()->environment('local')) {
     Route::get('test-email/{email}', function ($email) {
         $emailService = new \App\Services\EmailVerificationService();
         return $emailService->sendVerificationCode($email) ? 'Email sent!' : 'Failed to send email';
+    });
+    
+    // Debug route للتحقق من حالة المستخدم
+    Route::get('debug/user/{email}', function ($email) {
+        $doctor = \App\Models\Doctor::where('email', $email)->first();
+        if ($doctor) {
+            return response()->json([
+                'type' => 'doctor',
+                'email_verified' => $doctor->email_verified,
+                'is_verified_by_ocr' => $doctor->is_verified_by_ocr,
+                'email_verified_at' => $doctor->email_verified_at,
+                'ocr_verified_at' => $doctor->ocr_verified_at ?? 'Not set'
+            ]);
+        }
+        
+        $patient = \App\Models\Patient::where('email', $email)->first();
+        if ($patient) {
+            return response()->json([
+                'type' => 'patient',
+                'email_verified' => $patient->email_verified,
+                'email_verified_at' => $patient->email_verified_at
+            ]);
+        }
+        
+        return response()->json(['message' => 'User not found'], 404);
     });
 }
