@@ -36,7 +36,6 @@ class Doctor extends Authenticatable
 
     protected $casts = [
         'session_price' => 'decimal:2',
-        'is_verified' => 'boolean',
         'is_verified_by_ocr' => 'boolean',
         'email_verified_at' => 'datetime',
     ];
