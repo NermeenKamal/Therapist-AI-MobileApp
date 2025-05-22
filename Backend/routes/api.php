@@ -31,17 +31,15 @@ Route::post('auth/login', [AuthController::class, 'login'])->name('login');
 Route::post('auth/verify-email', [AuthController::class, 'verifyEmail']);
 Route::post('auth/resend-verification-code', [AuthController::class, 'resendVerificationCode']);
 
-// OCR Routes - جديدة (public للتسجيل)
+// OCR Routes - جديدة (public للتسجيل والتحقق)
 Route::post('ocr/extract-id-data', [OcrController::class, 'extractIdData']);
+Route::post('ocr/verify-extracted-data', [OcrController::class, 'verifyExtractedData']); // نقلناه خارج auth
 
 // Protected Routes
 Route::middleware('auth:sanctum')->group(function () {
     // Auth Routes
     Route::get('/check-access', [AuthController::class, 'checkAccess']);
     Route::post('auth/logout', [AuthController::class, 'logout']);
-
-    // OCR Verification (للدكاترة المسجلين)
-    Route::post('ocr/verify-extracted-data', [OcrController::class, 'verifyExtractedData']);
 
     // Appointment routes
     Route::get('appointments', [AppointmentController::class, 'index']);
