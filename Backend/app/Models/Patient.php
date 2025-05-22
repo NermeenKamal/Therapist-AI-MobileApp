@@ -11,8 +11,6 @@ class Patient extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
 
-    protected $table = 'patients';
-
     protected $fillable = [
         'name',
         'email',
@@ -27,7 +25,8 @@ class Patient extends Authenticatable
         'emergency_contact_name',
         'emergency_contact_number',
         'profile_image',
-        'fcm_token'
+        'fcm_token',
+        'email_verified'
     ];
 
     protected $hidden = [
@@ -36,12 +35,41 @@ class Patient extends Authenticatable
     ];
 
     protected $casts = [
-        'date_of_birth' => 'date',
         'email_verified_at' => 'datetime',
+        'password' => 'hashed',
+        'date_of_birth' => 'date',
+        'email_verified' => 'boolean'
     ];
 
+    /**
+     * التحقق من أن المريض مُفعل
+     */
+    public function isVerified(): bool
+    {
+        return $this->email_verified;
+    }
+
+    /**
+     * المواعيد الخاصة بالمريض
+     */
     public function appointments()
     {
-        return $this->hasMany(Appointment::class, 'patient_id');
+        return $this->hasMany(Appointment::class);
     }
-} 
+
+    /**
+     * الرسائل المرسلة من المريض
+     */
+    public function sentMessages()
+    {
+        return $this->hasMany(ChatMessage::class, 'sender_id')->where('sender_type', 'patient');
+    }
+
+    /**
+     * الرسائل المستلمة للمريض
+     */
+    public function receivedMessages()
+    {
+        return $this->hasMany(ChatMessage::class, 'receiver_id')->where('receiver_type', 'patient');
+    }
+}
