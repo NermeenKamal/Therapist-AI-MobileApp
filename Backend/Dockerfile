@@ -35,6 +35,8 @@ ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/4.00/tessdata/
 
 # نسخ ملفات المشروع إلى داخل الحاوية
 COPY . .
+RUN composer install --no-interaction --optimize-autoloader
+
 
 # تعيين صلاحيات مجلدات Laravel
 RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
