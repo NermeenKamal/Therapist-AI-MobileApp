@@ -7,7 +7,7 @@ use App\Controllers\ChatController;
 use App\Controllers\NotificationController;
 use App\Controllers\BroadcastNotificationController;
 use App\Controllers\OcrVerificationController;
-use App\Controllers\OcrController; // الكنترولر الجديد
+use App\Controllers\OcrController;
 use App\Controllers\SentimentAnalysisController;
 use App\Controllers\ReportGenerationController;
 use App\Controllers\ForgotPasswordController;
@@ -22,24 +22,26 @@ use App\Controllers\PatientController;
 Route::post('/forgot-password', [ForgotPasswordController::class, 'sendResetCode']);
 Route::post('/reset-password', [ForgotPasswordController::class, 'reset'])->name('password.reset');
 
-// Public Auth Routes - محدثة
+// Public Auth Routes
 Route::post('auth/register-patient', [AuthController::class, 'registerPatient']);
 Route::post('auth/register-doctor', [AuthController::class, 'registerDoctor']);
 Route::post('auth/login', [AuthController::class, 'login'])->name('login');
 
-// Email Verification Routes - جديدة
+// Email Verification Routes
 Route::post('auth/verify-email', [AuthController::class, 'verifyEmail']);
 Route::post('auth/resend-verification-code', [AuthController::class, 'resendVerificationCode']);
 
-// OCR Routes - جديدة (public للتسجيل والتحقق)
+// OCR Routes - extract data فقط public
 Route::post('ocr/extract-id-data', [OcrController::class, 'extractIdData']);
-Route::post('ocr/verify-extracted-data', [OcrController::class, 'verifyExtractedData']); // نقلناه خارج auth
 
 // Protected Routes
 Route::middleware('auth:sanctum')->group(function () {
     // Auth Routes
     Route::get('/check-access', [AuthController::class, 'checkAccess']);
     Route::post('auth/logout', [AuthController::class, 'logout']);
+
+    // OCR Routes - verification محمي بـ auth
+    Route::post('ocr/verify-extracted-data', [OcrController::class, 'verifyExtractedData']);
 
     // Appointment routes
     Route::get('appointments', [AppointmentController::class, 'index']);
