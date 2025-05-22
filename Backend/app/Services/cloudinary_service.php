@@ -3,7 +3,8 @@
 namespace App\Services;
 
 use Cloudinary\Cloudinary;
-use Cloudinary\Transformation\Resize;
+use Cloudinary\Configuration\Configuration;
+use Cloudinary\Api\Upload\UploadApi;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Log;
 
@@ -13,13 +14,15 @@ class CloudinaryService
 
     public function __construct()
     {
-        $this->cloudinary = new Cloudinary([
+        Configuration::instance([
             'cloud' => [
                 'cloud_name' => 'dqgkjyaqz',
                 'api_key' => '867792188442959',
                 'api_secret' => 'SlbIpvZ775nMnmMTB0iRffElLsM'
             ]
         ]);
+        
+        $this->cloudinary = new Cloudinary();
     }
 
     /**
@@ -28,7 +31,8 @@ class CloudinaryService
     public function uploadImage(UploadedFile $file, string $folder = 'uploads'): string
     {
         try {
-            $result = $this->cloudinary->uploadApi()->upload(
+            $uploadApi = new UploadApi();
+            $result = $uploadApi->upload(
                 $file->getRealPath(),
                 [
                     'folder' => $folder,
@@ -61,7 +65,8 @@ class CloudinaryService
     public function uploadPdf(UploadedFile $file, string $folder = 'documents'): string
     {
         try {
-            $result = $this->cloudinary->uploadApi()->upload(
+            $uploadApi = new UploadApi();
+            $result = $uploadApi->upload(
                 $file->getRealPath(),
                 [
                     'folder' => $folder,
@@ -110,7 +115,8 @@ class CloudinaryService
     public function deleteFile(string $publicId): bool
     {
         try {
-            $result = $this->cloudinary->uploadApi()->destroy($publicId);
+            $uploadApi = new UploadApi();
+            $result = $uploadApi->destroy($publicId);
             
             Log::info('File deleted from Cloudinary', [
                 'public_id' => $publicId,
@@ -145,15 +151,18 @@ class CloudinaryService
     public function getOptimizedImageUrl(string $publicId, int $width = null, int $height = null): string
     {
         try {
-            $transformation = [];
+            $baseUrl = "https://res.cloudinary.com/dqgkjyaqz/image/upload/";
             
-            if ($width || $height) {
-                $transformation[] = (new Resize())->width($width)->height($height);
+            $transformation = "";
+            if ($width && $height) {
+                $transformation = "w_{$width},h_{$height},c_fill/";
+            } elseif ($width) {
+                $transformation = "w_{$width}/";
+            } elseif ($height) {
+                $transformation = "h_{$height}/";
             }
-
-            return $this->cloudinary->image($publicId)
-                ->addTransformation(...$transformation)
-                ->toUrl();
+            
+            return $baseUrl . $transformation . $publicId;
 
         } catch (\Exception $e) {
             Log::error('Failed to generate optimized image URL', [
