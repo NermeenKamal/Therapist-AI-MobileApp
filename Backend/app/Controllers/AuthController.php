@@ -578,4 +578,59 @@ class AuthController extends Controller
             'user_type' => $user instanceof \App\Models\Doctor ? 'doctor' : 'patient'
         ]);
     }
+
+
+
+    public function requestOcrVerificationToken(Request $request): JsonResponse
+{
+    $validator = Validator::make($request->all(), [
+        'email' => 'required|email'
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json(['errors' => $validator->errors()], 422);
+    }
+
+    try {
+        $doctor = Doctor::where('email', $request->email)->first();
+        
+        if (!$doctor) {
+            return response()->json([
+                'message' => 'Doctor not found'
+            ], 404);
+        }
+        
+        if (!$doctor->email_verified) {
+            return response()->json([
+                'message' => 'Please verify your email first'
+            ], 403);
+        }
+        
+        if ($doctor->is_verified_by_ocr) {
+            return response()->json([
+                'message' => 'OCR verification already completed'
+            ]);
+        }
+        
+        if ($this->emailService->sendOcrVerificationToken($request->email)) {
+            return response()->json([
+                'message' => 'OCR verification token sent successfully'
+            ]);
+        }
+        
+        return response()->json([
+            'message' => 'Failed to send OCR verification token'
+        ], 500);
+
+    } catch (\Exception $e) {
+        Log::error('OCR token request failed:', [
+            'error' => $e->getMessage(),
+            'email' => $request->email
+        ]);
+
+        return response()->json([
+            'message' => 'Failed to request OCR verification token'
+        ], 500);
+    }
+}
 }
