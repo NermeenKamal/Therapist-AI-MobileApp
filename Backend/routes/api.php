@@ -35,7 +35,7 @@ Route::post('auth/resend-verification-code', [AuthController::class, 'resendVeri
 
 // OCR Routes - جديدة (public للتسجيل)
 Route::post('ocr/extract-id-data', [OcrController::class, 'extractIdData']);
-Route::post('ocr/verify-extracted-data', [OcrController::class, 'verifyExtractedData']);
+Route::post('ocr/verify-extracted-data', [OcrController::class, 'verifyExtractedData'])->middleware('auth:sanctum');
 
 Route::post('auth/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
 
