@@ -27,8 +27,6 @@ Route::post('auth/register-patient', [AuthController::class, 'registerPatient'])
 Route::post('auth/register-doctor', [AuthController::class, 'registerDoctor']);
 Route::post('auth/login', [AuthController::class, 'login'])->name('login');
 
-Route::middleware('auth:sanctum')->get('/check-access', [AuthController::class, 'checkAccess']);
-
 // Email Verification Routes - جديدة
 Route::post('auth/verify-email', [AuthController::class, 'verifyEmail']);
 Route::post('auth/resend-verification-code', [AuthController::class, 'resendVerificationCode']);
@@ -36,12 +34,14 @@ Route::post('auth/resend-verification-code', [AuthController::class, 'resendVeri
 // OCR Routes - جديدة (public للتسجيل)
 Route::post('ocr/extract-id-data', [OcrController::class, 'extractIdData']);
 
-Route::post('auth/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
-
-Route::post('auth/resend-verification-code', [AuthController::class, 'resendVerificationCode']);
-
+// Protected Routes
 Route::middleware('auth:sanctum')->group(function () {
-    Route::post('ocr/verify-extracted-data', [OcrController::class, 'verifyExtractedData'])
+    // Auth Routes
+    Route::get('/check-access', [AuthController::class, 'checkAccess']);
+    Route::post('auth/logout', [AuthController::class, 'logout']);
+
+    // OCR Verification (للدكاترة المسجلين)
+    Route::post('ocr/verify-extracted-data', [OcrController::class, 'verifyExtractedData']);
 
     // Appointment routes
     Route::get('appointments', [AppointmentController::class, 'index']);
