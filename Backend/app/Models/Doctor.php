@@ -19,14 +19,12 @@ class Doctor extends Authenticatable
         'password',
         'mobile_number',
         'national_id',
-        'national_id_path',
         'specialization',
         'bio',
         'session_price',
         'medical_license_path',
         'profile_image',
         'fcm_token',
-        'is_verified',
         'is_verified_by_ocr',
         'clinic_address'
     ];
