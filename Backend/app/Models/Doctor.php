@@ -27,7 +27,8 @@ class Doctor extends Authenticatable
         'clinic_address',
         'email_verified',
         'is_verified_by_ocr',
-        'license_number'
+        'license_number',
+        'email_verified_at'
     ];
 
     protected $hidden = [
