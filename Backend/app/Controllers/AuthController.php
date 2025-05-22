@@ -119,6 +119,7 @@ class AuthController extends Controller
 }
 
 
+
     public function registerPatient(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
