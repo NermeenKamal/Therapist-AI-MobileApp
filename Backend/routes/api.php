@@ -34,6 +34,8 @@ Route::post('auth/resend-verification-code', [AuthController::class, 'resendVeri
 // OCR Routes - extract data only (Public for registration flow)
 Route::post('ocr/extract-id-data', [OcrController::class, 'extractIdData']);
 
+Route::post('ocr/verify-extracted-data', [OcrController::class, 'verifyExtractedData']);
+
 // Protected Routes
 Route::middleware('auth:sanctum')->group(function () {
     // Auth Routes
@@ -41,7 +43,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('auth/logout', [AuthController::class, 'logout']);
 
     // OCR Routes (Protected - requires authentication)
-    Route::post('ocr/verify-extracted-data', [OcrController::class, 'verifyExtractedData']);
     Route::get('ocr/verification-status', [OcrController::class, 'getVerificationStatus']);
 
     // Appointment routes
