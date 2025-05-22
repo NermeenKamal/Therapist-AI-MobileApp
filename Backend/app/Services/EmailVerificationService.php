@@ -130,4 +130,16 @@ class EmailVerificationService
     
     return true;
 }
+
+    public function verifyOcrToken($email, $token)
+{
+    $record = DB::table('ocr_verification_tokens')
+        ->where('email', $email)
+        ->where('token', $token)
+        ->where('expires_at', '>', now())
+        ->first();
+    
+    return $record !== null;
+}
+    
 }
