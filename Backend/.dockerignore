@@ -1,0 +1,29 @@
+# Ignore Node modules
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Laravel specific
+vendor
+.env
+.env.*
+storage/*.key
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+bootstrap/cache/*
+
+# Git and system files
+.git
+.gitignore
+.dockerignore
+.idea
+.vscode
+.DS_Store
+Thumbs.db
+
+# OS-specific
+*.swp
+*.swo
+*.bak
