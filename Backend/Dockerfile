@@ -20,19 +20,18 @@ RUN apt-get update && apt-get install -y \
     libtesseract-dev \
     imagemagick \
     libmagickwand-dev \
+    libsodium-dev \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 # Optional: Arabic traineddata (in case it's not copied)
 RUN apt-get update && apt-get install -y tesseract-ocr-ara tesseract-ocr-eng && rm -rf /var/lib/apt/lists/*
 
 # Install PHP extensions
-RUN docker-php-ext-install pdo pdo_mysql zip gd mbstring xml fileinfo
+RUN docker-php-ext-install pdo pdo_mysql zip gd mbstring xml fileinfo sodium
 
 # Install ImageMagick PHP extension
 RUN pecl install imagick && docker-php-ext-enable imagick
-
-# Add sodium extension (required by Laravel)
-RUN docker-php-ext-install sodium
 
 # Add Composer from official composer image
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
