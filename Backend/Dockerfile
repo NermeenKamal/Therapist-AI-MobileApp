@@ -1,6 +1,7 @@
+# Start from PHP base image
 FROM php:8.2-cli
 
-# Install essential packages + tesseract + imagemagick
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     unzip \
     git \
@@ -16,39 +17,43 @@ RUN apt-get update && apt-get install -y \
     nodejs \
     npm \
     tesseract-ocr \
-    tesseract-ocr-ara \
     libtesseract-dev \
     imagemagick
 
-# Install required PHP extensions
+# Optional: Arabic traineddata (in case it's not copied)
+RUN apt-get install -y tesseract-ocr-ara
+
+# Install PHP extensions
 RUN docker-php-ext-install pdo pdo_mysql zip
 
-# Copy composer from official image
+# Add Composer from official composer image
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # Set working directory
 WORKDIR /var/www
 
-# Copy all project files
+# Copy project files
 COPY . .
 
-# Install PHP dependencies
-RUN composer require spatie/browsershot && \
-    composer update && \
-    composer install --no-interaction --optimize-autoloader
+# Copy tessdata files into the container (relative to /var/www)
+COPY tessdata/ /var/www/tessdata/
 
-# Install Puppeteer for Browsershot
-RUN npm install puppeteer
+# Install Laravel dependencies
+RUN composer install --no-interaction --optimize-autoloader
+
+# Install Puppeteer dependencies
+RUN npm install puppeteer && \
+    chmod -R 777 node_modules/puppeteer/.local-chromium
 
 # Configure Puppeteer
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
-# Optional Tesseract ENV
-ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/4.00/tessdata/
+# Set path for Tesseract language files
+ENV TESSDATA_PREFIX=/var/www/tessdata/
 
-# Expose port
+# Expose port (for Laravel serve)
 EXPOSE 8000
 
-# Start Laravel server
+# Laravel startup command for Railway
 CMD ["sh", "-c", "php artisan serve --host=0.0.0.0 --port=$PORT"]
