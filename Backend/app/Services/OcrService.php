@@ -15,43 +15,19 @@ class OcrService
     public function extractIdData(UploadedFile $file): array
 {
     try {
-        // حفظ الملف مؤقتاً
-        $tempPath = $file->store('temp');
-        $fullPath = Storage::path($tempPath);
+        Log::info('Testing OCR fallback - no Tesseract');
 
-        // تهيئة Tesseract OCR
-        $ocr = new TesseractOCR($fullPath);
-        $ocr->lang('eng'); // فقط الإنجليزية
-        set_time_limit(15);
-        Log::info('Starting OCR (English only)...');
-        
-        $text = $ocr->run();
-        
-        Log::info('OCR done:', ['text' => $text]);
-
-
-
-        // ⬇️ تسجيل نتيجة النص
-        Log::info('OCR output:', ['text' => $text]);
-
-        // حذف الملف المؤقت
-        Storage::delete($tempPath);
-
-        // استخراج الاسم والرقم القومي
-        $extractedName = $this->extractName($text);
-        $extractedId = $this->extractNationalId($text);
-
-        return [$extractedName, $extractedId];
+        return ['Test Name', '12345678901234'];
 
     } catch (\Exception $e) {
-        Log::error('OCR extraction failed:', [
-            'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString()
+        Log::error('OCR fallback failed:', [
+            'error' => $e->getMessage()
         ]);
 
-        throw new \Exception('Failed to extract data from image: ' . $e->getMessage());
+        throw new \Exception('Failed to extract data from image.');
     }
 }
+
 
     
     /**
