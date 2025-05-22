@@ -26,7 +26,8 @@ class Doctor extends Authenticatable
         'fcm_token',
         'clinic_address',
         'email_verified',
-        'is_verified_by_ocr'
+        'is_verified_by_ocr',
+        'license_number'
     ];
 
     protected $hidden = [
