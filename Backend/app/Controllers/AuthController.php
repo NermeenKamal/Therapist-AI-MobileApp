@@ -30,109 +30,99 @@ class AuthController extends Controller
     }
 
     public function login(Request $request): JsonResponse
-    {
-        // Rate limiting للحماية من هجمات القوة الغاشمة
-        $key = 'login.' . $request->ip();
-        if (RateLimiter::tooManyAttempts($key, 5)) {
+{
+    $key = 'login.' . $request->ip();
+    if (RateLimiter::tooManyAttempts($key, 5)) {
+        return response()->json([
+            'message' => 'Too many login attempts. Please try again later.',
+            'retry_after' => RateLimiter::availableIn($key)
+        ], 429);
+    }
+
+    $validator = Validator::make($request->all(), [
+        'email' => 'required|email',
+        'password' => 'required'
+    ]);
+
+    if ($validator->fails()) {
+        RateLimiter::hit($key);
+        return response()->json(['errors' => $validator->errors()], 422);
+    }
+
+    try {
+        // البحث عن دكتور
+        $doctor = Doctor::where('email', $request->email)->first();
+        if ($doctor && Hash::check($request->password, $doctor->password)) {
+            if (!$doctor->email_verified) {
+                return response()->json([
+                    'message' => 'Please verify your email first',
+                    'status' => 'email_not_verified'
+                ], 403);
+            }
+
+            if (!$doctor->isLicenseVerified()) {
+                return response()->json([
+                    'message' => 'Your account is pending verification by the Ministry of Health',
+                    'status' => 'license_not_verified'
+                ], 403);
+            }
+
+            if (!$doctor->is_verified_by_ocr) {
+                return response()->json([
+                    'message' => 'Please complete OCR identity verification first',
+                    'status' => 'ocr_not_verified'
+                ], 403);
+            }
+
+            RateLimiter::clear($key);
+            $token = $doctor->createToken('auth_token')->plainTextToken;
+
             return response()->json([
-                'message' => 'Too many login attempts. Please try again later.',
-                'retry_after' => RateLimiter::availableIn($key)
-            ], 429);
+                'message' => 'Logged in successfully as doctor',
+                'user' => $doctor->makeHidden(['password']),
+                'user_type' => 'doctor',
+                'token' => $token
+            ]);
         }
 
-        $validator = Validator::make($request->all(), [
-            'email' => 'required|email',
-            'password' => 'required',
-            'verification_code' => 'required|string|size:6'
+        // البحث عن مريض
+        $patient = Patient::where('email', $request->email)->first();
+        if ($patient && Hash::check($request->password, $patient->password)) {
+            if (!$patient->email_verified) {
+                return response()->json([
+                    'message' => 'Please verify your email first',
+                    'status' => 'email_not_verified'
+                ], 403);
+            }
+
+            RateLimiter::clear($key);
+            $token = $patient->createToken('auth_token')->plainTextToken;
+
+            return response()->json([
+                'message' => 'Logged in successfully as patient',
+                'user' => $patient->makeHidden(['password']),
+                'user_type' => 'patient',
+                'token' => $token
+            ]);
+        }
+
+        RateLimiter::hit($key);
+        return response()->json([
+            'message' => 'Invalid credentials'
+        ], 401);
+
+    } catch (\Exception $e) {
+        Log::error('Login failed:', [
+            'error' => $e->getMessage(),
+            'email' => $request->email
         ]);
 
-        if ($validator->fails()) {
-            RateLimiter::hit($key);
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
-
-        try {
-            // التحقق من كود التفعيل أولاً
-            if (!$this->emailService->verifyCode($request->email, $request->verification_code)) {
-                RateLimiter::hit($key);
-                return response()->json([
-                    'message' => 'Invalid or expired verification code',
-                    'status' => 'invalid_code'
-                ], 400);
-            }
-
-            // البحث في جدول الأطباء
-            $doctor = Doctor::where('email', $request->email)->first();
-            if ($doctor && Hash::check($request->password, $doctor->password)) {
-                
-                // التحقق من تفعيل الإيميل
-                if (!$doctor->email_verified) {
-                    return response()->json([
-                        'message' => 'Please verify your email first',
-                        'status' => 'email_not_verified'
-                    ], 403);
-                }
-
-                // التحقق من حالة الترخيص
-                if (!$doctor->isLicenseVerified()) {
-                    return response()->json([
-                        'message' => 'Your account is pending verification by the Ministry of Health',
-                        'status' => 'pending_ministry_verification'
-                    ], 403);
-                }
-
-                RateLimiter::clear($key);
-                $token = $doctor->createToken('auth_token')->plainTextToken;
-                
-                return response()->json([
-                    'message' => 'Logged in successfully as doctor',
-                    'user' => $doctor->makeHidden(['password']),
-                    'user_type' => 'doctor',
-                    'token' => $token
-                ]);
-            }
-
-            // البحث في جدول المرضى
-            $patient = Patient::where('email', $request->email)->first();
-            if ($patient && Hash::check($request->password, $patient->password)) {
-                
-                // التحقق من تفعيل الإيميل
-                if (!$patient->email_verified) {
-                    return response()->json([
-                        'message' => 'Please verify your email first',
-                        'status' => 'email_not_verified'
-                    ], 403);
-                }
-
-                RateLimiter::clear($key);
-                $token = $patient->createToken('auth_token')->plainTextToken;
-                
-                return response()->json([
-                    'message' => 'Logged in successfully as patient',
-                    'user' => $patient->makeHidden(['password']),
-                    'user_type' => 'patient',
-                    'token' => $token
-                ]);
-            }
-
-            RateLimiter::hit($key);
-            return response()->json([
-                'message' => 'Invalid credentials'
-            ], 401);
-
-        } catch (\Exception $e) {
-            Log::error('Login failed:', [
-                'error' => $e->getMessage(),
-                'email' => $request->email
-            ]);
-
-            return response()->json([
-                'message' => 'Registration failed. Please try again.',
-                'error' => $e->getMessage()
-            ], 500);
-
-        }
+        return response()->json([
+            'message' => 'Login failed. Please try again.'
+        ], 500);
     }
+}
+
 
     public function registerPatient(Request $request): JsonResponse
     {
