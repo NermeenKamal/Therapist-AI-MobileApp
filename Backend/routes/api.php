@@ -7,6 +7,7 @@ use App\Controllers\ChatController;
 use App\Controllers\NotificationController;
 use App\Controllers\BroadcastNotificationController;
 use App\Controllers\OcrVerificationController;
+use App\Controllers\OcrController; // الكنترولر الجديد
 use App\Controllers\SentimentAnalysisController;
 use App\Controllers\ReportGenerationController;
 use App\Controllers\ForgotPasswordController;
@@ -21,10 +22,19 @@ use App\Controllers\PatientController;
 Route::post('/forgot-password', [ForgotPasswordController::class, 'sendResetCode']);
 Route::post('/reset-password', [ForgotPasswordController::class, 'reset'])->name('password.reset');
 
-// Public Auth
+// Public Auth Routes - محدثة
 Route::post('auth/register-patient', [AuthController::class, 'registerPatient']);
 Route::post('auth/register-doctor', [AuthController::class, 'registerDoctor']);
 Route::post('auth/login', [AuthController::class, 'login']);
+
+// Email Verification Routes - جديدة
+Route::post('auth/verify-email', [AuthController::class, 'verifyEmail']);
+Route::post('auth/resend-verification-code', [AuthController::class, 'resendVerificationCode']);
+
+// OCR Routes - جديدة (public للتسجيل)
+Route::post('ocr/extract-id-data', [OcrController::class, 'extractIdData']);
+Route::post('ocr/verify-extracted-data', [OcrController::class, 'verifyExtractedData']);
+
 Route::post('auth/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
 
 Route::middleware('auth:sanctum')->group(function () {
@@ -85,3 +95,11 @@ Route::middleware('auth:sanctum')->group(function () {
     // Article Routes
     Route::get('/articles', [ArticleController::class, 'index']);
 });
+
+// Test Routes (remove in production)
+if (app()->environment('local')) {
+    Route::get('test-email/{email}', function ($email) {
+        $emailService = new \App\Services\EmailVerificationService();
+        return $emailService->sendVerificationCode($email) ? 'Email sent!' : 'Failed to send email';
+    });
+}
