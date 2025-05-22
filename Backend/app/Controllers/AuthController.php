@@ -30,95 +30,149 @@ class AuthController extends Controller
     }
 
     public function login(Request $request): JsonResponse
-    {
-        $key = 'login.' . $request->ip();
-        if (RateLimiter::tooManyAttempts($key, 5)) {
-            return response()->json([
-                'message' => 'Too many login attempts. Please try again later.',
-                'retry_after' => RateLimiter::availableIn($key)
-            ], 429);
-        }
+{
+    $key = 'login.' . $request->ip();
+    if (RateLimiter::tooManyAttempts($key, 5)) {
+        return response()->json([
+            'message' => 'Too many login attempts. Please try again later.',
+            'retry_after' => RateLimiter::availableIn($key)
+        ], 429);
+    }
 
-        $validator = Validator::make($request->all(), [
-            'email' => 'required|email',
-            'password' => 'required'
+    $validator = Validator::make($request->all(), [
+        'email' => 'required|email',
+        'password' => 'required'
+    ]);
+
+    if ($validator->fails()) {
+        RateLimiter::hit($key);
+        return response()->json(['errors' => $validator->errors()], 422);
+    }
+
+    try {
+        Log::info('Login attempt started:', [
+            'email' => $request->email,
+            'ip' => $request->ip()
         ]);
 
-        if ($validator->fails()) {
-            RateLimiter::hit($key);
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
+        // تسجيل دخول الدكتور
+        $doctor = Doctor::where('email', $request->email)->first();
+        if ($doctor && Hash::check($request->password, $doctor->password)) {
+            
+            Log::info('Doctor login attempt:', [
+                'doctor_id' => $doctor->id,
+                'email' => $doctor->email,
+                'email_verified' => $doctor->email_verified,
+                'email_verified_at' => $doctor->email_verified_at,
+                'is_verified_by_ocr' => $doctor->is_verified_by_ocr,
+                'ocr_verified_at' => $doctor->ocr_verified_at ?? 'Not set'
+            ]);
 
-        try {
-            // تسجيل دخول الدكتور
-            $doctor = Doctor::where('email', $request->email)->first();
-            if ($doctor && Hash::check($request->password, $doctor->password)) {
-
-                // شرط الدكتور: email_verified = true و is_verified_by_ocr = true
-                if (!$doctor->email_verified) {
-                    return response()->json([
-                        'message' => 'Please verify your email first.',
-                        'status' => 'email_not_verified'
-                    ], 403);
-                }
-
-                if (!$doctor->is_verified_by_ocr) {
-                    return response()->json([
-                        'message' => 'Please complete OCR verification before logging in.',
-                        'status' => 'ocr_not_verified'
-                    ], 403);
-                }
-
-                RateLimiter::clear($key);
-                $token = $doctor->createToken('auth_token')->plainTextToken;
-
-                return response()->json([
-                    'message' => 'Logged in successfully as doctor.',
-                    'user' => $doctor->makeHidden(['password']),
-                    'user_type' => 'doctor',
-                    'token' => $token
+            // شرط الدكتور: email_verified = true و is_verified_by_ocr = true
+            if (!$doctor->email_verified) {
+                Log::warning('Doctor login failed - email not verified:', [
+                    'doctor_id' => $doctor->id,
+                    'email' => $doctor->email
                 ]);
+                
+                return response()->json([
+                    'message' => 'Please verify your email first.',
+                    'status' => 'email_not_verified'
+                ], 403);
             }
 
-            // تسجيل دخول المريض
-            $patient = Patient::where('email', $request->email)->first();
-            if ($patient && Hash::check($request->password, $patient->password)) {
-
-                // شرط المريض: email_verified = true فقط
-                if (!$patient->email_verified) {
-                    return response()->json([
-                        'message' => 'Please verify your email first.',
-                        'status' => 'email_not_verified'
-                    ], 403);
-                }
-
-                RateLimiter::clear($key);
-                $token = $patient->createToken('auth_token')->plainTextToken;
-
-                return response()->json([
-                    'message' => 'Logged in successfully as patient.',
-                    'user' => $patient->makeHidden(['password']),
-                    'user_type' => 'patient',
-                    'token' => $token
+            if (!$doctor->is_verified_by_ocr) {
+                Log::warning('Doctor login failed - OCR not verified:', [
+                    'doctor_id' => $doctor->id,
+                    'email' => $doctor->email,
+                    'is_verified_by_ocr' => $doctor->is_verified_by_ocr
                 ]);
+                
+                return response()->json([
+                    'message' => 'Please complete OCR verification before logging in.',
+                    'status' => 'ocr_not_verified'
+                ], 403);
             }
 
-            RateLimiter::hit($key);
-            return response()->json([
-                'message' => 'Invalid credentials.'
-            ], 401);
+            RateLimiter::clear($key);
+            $token = $doctor->createToken('auth_token')->plainTextToken;
 
-        } catch (\Exception $e) {
-            Log::error('Login failed:', [
-                'error' => $e->getMessage(),
-                'email' => $request->email
+            Log::info('Doctor login successful:', [
+                'doctor_id' => $doctor->id,
+                'email' => $doctor->email
             ]);
 
             return response()->json([
-                'message' => 'Login failed. Please try again.'
-            ], 500);
+                'message' => 'Logged in successfully as doctor.',
+                'user' => $doctor->makeHidden(['password']),
+                'user_type' => 'doctor',
+                'token' => $token
+            ]);
         }
+
+        // تسجيل دخول المريض
+        $patient = Patient::where('email', $request->email)->first();
+        if ($patient && Hash::check($request->password, $patient->password)) {
+
+            Log::info('Patient login attempt:', [
+                'patient_id' => $patient->id,
+                'email' => $patient->email,
+                'email_verified' => $patient->email_verified,
+                'email_verified_at' => $patient->email_verified_at
+            ]);
+
+            // شرط المريض: email_verified = true فقط
+            if (!$patient->email_verified) {
+                Log::warning('Patient login failed - email not verified:', [
+                    'patient_id' => $patient->id,
+                    'email' => $patient->email
+                ]);
+                
+                return response()->json([
+                    'message' => 'Please verify your email first.',
+                    'status' => 'email_not_verified'
+                ], 403);
+            }
+
+            RateLimiter::clear($key);
+            $token = $patient->createToken('auth_token')->plainTextToken;
+
+            Log::info('Patient login successful:', [
+                'patient_id' => $patient->id,
+                'email' => $patient->email
+            ]);
+
+            return response()->json([
+                'message' => 'Logged in successfully as patient.',
+                'user' => $patient->makeHidden(['password']),
+                'user_type' => 'patient',
+                'token' => $token
+            ]);
+        }
+
+        Log::warning('Login failed - invalid credentials:', [
+            'email' => $request->email,
+            'doctor_exists' => $doctor ? 'Yes' : 'No',
+            'patient_exists' => $patient ? 'Yes' : 'No'
+        ]);
+
+        RateLimiter::hit($key);
+        return response()->json([
+            'message' => 'Invalid credentials.'
+        ], 401);
+
+    } catch (\Exception $e) {
+        Log::error('Login failed:', [
+            'error' => $e->getMessage(),
+            'email' => $request->email,
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        return response()->json([
+            'message' => 'Login failed. Please try again.'
+        ], 500);
     }
+}
 
     public function registerPatient(Request $request): JsonResponse
     {
