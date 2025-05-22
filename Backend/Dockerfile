@@ -48,13 +48,12 @@ COPY tessdata/ /var/www/tessdata/
 # Install Laravel dependencies
 RUN composer install --no-interaction --optimize-autoloader
 
-# Install Puppeteer dependencies
-RUN npm install puppeteer && \
-    chmod -R 777 node_modules/puppeteer/.local-chromium
-
-# Configure Puppeteer
+# Configure Puppeteer to use system Chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+
+# Install Puppeteer dependencies
+RUN npm install puppeteer
 
 # Set path for Tesseract language files
 ENV TESSDATA_PREFIX=/var/www/tessdata/
