@@ -13,38 +13,50 @@ class OcrService
      * استخراج البيانات من بطاقة الهوية
      */
     public function extractIdData(UploadedFile $file): array
-    {
-        try {
-            // حفظ الملف مؤقتاً
-            $tempPath = $file->store('temp');
-            $fullPath = Storage::path($tempPath);
+{
+    try {
+        // حفظ الملف مؤقتاً
+        $tempPath = $file->store('temp');
+        $fullPath = Storage::path($tempPath);
 
-            // تشغيل OCR
-            $ocr = new TesseractOCR($fullPath);
-            $ocr->lang('ara', 'eng'); // دعم العربية والإنجليزية
-            
-            $text = $ocr->run();
-            
-            // حذف الملف المؤقت
-            Storage::delete($tempPath);
-            
-            Log::info('OCR Text Extracted:', ['text' => $text]);
-            
-            // استخراج الاسم والرقم القومي
-            $extractedName = $this->extractName($text);
-            $extractedId = $this->extractNationalId($text);
-            
-            return [$extractedName, $extractedId];
-            
-        } catch (\Exception $e) {
-            Log::error('OCR extraction failed:', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            
-            throw new \Exception('Failed to extract data from image: ' . $e->getMessage());
-        }
+        // تهيئة Tesseract OCR
+        $ocr = new TesseractOCR($fullPath);
+        $ocr->lang('ara', 'eng'); // دعم العربية والإنجليزية
+
+        // إزالة configFile('hocr') مؤقتًا لأنه يسبب تعليق
+        // $ocr->configFile('hocr');
+
+        // ⬇️ منع المهلة الطويلة أو التجمد
+        set_time_limit(15);
+
+        // ⬇️ بدء التسجيل
+        Log::info('Starting OCR with Tesseract', ['file' => $fullPath]);
+
+        // تنفيذ OCR
+        $text = $ocr->run();
+
+        // ⬇️ تسجيل نتيجة النص
+        Log::info('OCR output:', ['text' => $text]);
+
+        // حذف الملف المؤقت
+        Storage::delete($tempPath);
+
+        // استخراج الاسم والرقم القومي
+        $extractedName = $this->extractName($text);
+        $extractedId = $this->extractNationalId($text);
+
+        return [$extractedName, $extractedId];
+
+    } catch (\Exception $e) {
+        Log::error('OCR extraction failed:', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        throw new \Exception('Failed to extract data from image: ' . $e->getMessage());
     }
+}
+
     
     /**
      * استخراج الاسم من النص
