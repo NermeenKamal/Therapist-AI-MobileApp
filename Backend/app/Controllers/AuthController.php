@@ -191,99 +191,117 @@ class AuthController extends Controller
     }
 
     public function registerDoctor(Request $request): JsonResponse
-    {
-        $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255|min:3',
-            'email' => 'required|string|email|max:255|unique:doctors,email|unique:patients,email',
-            'password' => 'required|string|min:8|confirmed|regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/',
-            'mobile_number' => ['required', 'string', new EgyptianMobileNumber(), 'unique:doctors,mobile_number'],
-            'national_id' => ['required', 'string', new EgyptianNationalId(), 'unique:doctors,national_id'],
-            'license_number' => ['required', 'string', new ValidLicensedDoctor(
-                $request->email, 
-                $request->national_id, 
-                $request->specialization
-            )],
-            'medical_license_path' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120',
-            'specialization' => 'required|string|in:Behavioral,Mindfulness & Acceptance,Talk Supportive,Relationship & Family,Solution Focused & Goal Oriented',
-        ], [
-            'password.regex' => 'Password must contain at least one uppercase letter, one lowercase letter, and one number.',
-            'email.unique' => 'This email is already registered.',
+{
+    $validator = Validator::make($request->all(), [
+        'name' => 'required|string|max:255|min:3',
+        'email' => 'required|string|email|max:255|unique:doctors,email|unique:patients,email',
+        'password' => 'required|string|min:8|confirmed|regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/',
+        'mobile_number' => ['required', 'string', new EgyptianMobileNumber(), 'unique:doctors,mobile_number'],
+        'national_id' => ['required', 'string', new EgyptianNationalId(), 'unique:doctors,national_id'],
+        'license_number' => ['required', 'string', new ValidLicensedDoctor(
+            $request->email,
+            $request->national_id,
+            $request->specialization
+        )],
+        'medical_license_path' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120',
+        'specialization' => 'required|string|in:Behavioral,Mindfulness & Acceptance,Talk Supportive,Relationship & Family,Solution Focused & Goal Oriented',
+    ], [
+        'password.regex' => 'Password must contain at least one uppercase letter, one lowercase letter, and one number.',
+        'email.unique' => 'This email is already registered.',
+    ]);
+
+    if ($validator->fails()) {
+        Log::error('Doctor validation failed', [
+            'errors' => $validator->errors()
         ]);
 
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
+        return response()->json(['errors' => $validator->errors()], 422);
+    }
 
-        try {
-            DB::beginTransaction();
+    try {
+        DB::beginTransaction();
 
-            // التحقق المضاعف من الترخيص
-            $licensedDoctor = LicensedDoctor::where('email', $request->email)
-                ->where('license_number', $request->license_number)
-                ->where('national_id', $request->national_id)
-                ->where('specialization', $request->specialization)
-                ->where('verified', true)
-                ->first();
+        Log::info('Doctor validation passed. Starting registration process.');
 
-            if (!$licensedDoctor) {
-                return response()->json([
-                    'message' => 'Doctor information does not match our verified licensed doctors database.',
-                    'status' => 'not_licensed'
-                ], 403);
-            }
+        // تأكيد الترخيص (دوبل تشيك)
+        $licensedDoctor = LicensedDoctor::where('email', $request->email)
+            ->where('license_number', $request->license_number)
+            ->where('national_id', $request->national_id)
+            ->where('specialization', $request->specialization)
+            ->where('verified', true)
+            ->first();
 
-            // رفع الصورة على Cloudinary
-            $medicalLicensePath = null;
-            try {
-                if ($request->hasFile('medical_license_path')) {
-                    $file = $request->file('medical_license_path');
-                    $medicalLicensePath = $this->cloudinaryService->uploadFile($file, 'medical_licenses');
-                    Log::info('Cloudinary Upload Successful: ' . $medicalLicensePath);
-                }
-            } catch (\Exception $e) {
-                Log::error('Cloudinary Upload Failed: ' . $e->getMessage());
-                throw $e;
-            }
-
-            // إنشاء حساب الطبيب
-            $doctor = new Doctor();
-            $doctor->name = trim($request->input('name'));
-            $doctor->email = strtolower(trim($request->input('email')));
-            $doctor->password = Hash::make($request->input('password'));
-            $doctor->mobile_number = preg_replace('/[^\d]/', '', $request->input('mobile_number'));
-            $doctor->national_id = $request->input('national_id');
-            $doctor->license_number = $request->input('license_number');
-            $doctor->specialization = $request->input('specialization');
-            $doctor->medical_license_path = $medicalLicensePath;
-            $doctor->email_verified = false;
-            $doctor->save();
-
-            // إرسال كود التفعيل
-            if (!$this->emailService->sendVerificationCode($doctor->email)) {
-                throw new \Exception('Failed to send verification email');
-            }
-
-            DB::commit();
-
-            return response()->json([
-                'message' => 'Doctor registered successfully. Please check your email for verification code.',
-                'user' => $doctor->makeHidden(['password']),
-                'status' => 'pending_email_verification'
-            ], 201);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Doctor registration failed:', [
-                'error' => $e->getMessage(),
-                'email' => $request->email
+        if (!$licensedDoctor) {
+            Log::warning('License verification failed', [
+                'email' => $request->email,
+                'license' => $request->license_number,
+                'nid' => $request->national_id
             ]);
 
             return response()->json([
-                'message' => 'Registration failed. Please try again.',
-                'error' => app()->environment('local') ? $e->getMessage() : null
-            ], 500);
+                'message' => 'Doctor information does not match our verified licensed doctors database.',
+                'status' => 'not_licensed'
+            ], 403);
         }
+
+        // رفع الملف على Cloudinary
+        $medicalLicensePath = null;
+        if ($request->hasFile('medical_license_path')) {
+            try {
+                $file = $request->file('medical_license_path');
+                $medicalLicensePath = $this->cloudinaryService->uploadFile($file, 'medical_licenses');
+                Log::info('Cloudinary upload successful', [
+                    'url' => $medicalLicensePath
+                ]);
+            } catch (\Exception $e) {
+                Log::error('Cloudinary upload failed', [
+                    'error' => $e->getMessage()
+                ]);
+                throw new \Exception('Failed to upload medical license');
+            }
+        }
+
+        // إنشاء حساب الطبيب
+        $doctor = new Doctor();
+        $doctor->name = trim($request->input('name'));
+        $doctor->email = strtolower(trim($request->input('email')));
+        $doctor->password = Hash::make($request->input('password'));
+        $doctor->mobile_number = preg_replace('/[^\d]/', '', $request->input('mobile_number'));
+        $doctor->national_id = $request->input('national_id');
+        $doctor->license_number = $request->input('license_number');
+        $doctor->specialization = $request->input('specialization');
+        $doctor->medical_license_path = $medicalLicensePath;
+        $doctor->email_verified = false;
+        $doctor->save();
+
+        // إرسال كود التفعيل
+        if (!$this->emailService->sendVerificationCode($doctor->email)) {
+            throw new \Exception('Failed to send verification email');
+        }
+
+        DB::commit();
+
+        return response()->json([
+            'message' => 'Doctor registered successfully. Please check your email for verification code.',
+            'user' => $doctor->makeHidden(['password']),
+            'status' => 'pending_email_verification'
+        ], 201);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+
+        Log::error('Doctor registration failed', [
+            'error' => $e->getMessage(),
+            'email' => $request->email
+        ]);
+
+        return response()->json([
+            'message' => 'Registration failed. Please try again.',
+            'error' => $e->getMessage() // فقط للـ debug، احذفها في الإنتاج
+        ], 500);
     }
+}
+
 
     public function verifyEmail(Request $request): JsonResponse
     {
