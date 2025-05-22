@@ -365,56 +365,40 @@ class AuthController extends Controller
     }
 
     public function resendVerificationCode(Request $request): JsonResponse
-    {
-        $validator = Validator::make($request->all(), [
-            'email' => 'required|email'
+{
+    $validator = Validator::make($request->all(), [
+        'email' => 'required|email',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json(['errors' => $validator->errors()], 422);
+    }
+
+    // تحقق إذا كان المستخدم موجودًا
+    $user = User::where('email', $request->email)->first();
+    if (!$user) {
+        return response()->json(['message' => 'User not found'], 404);
+    }
+
+    // تحقق إذا كان الكود قد انتهت صلاحيته
+    if ($user->verification_code_expired) {
+        // أرسل كود التحقق الجديد
+        $verificationCode = rand(100000, 999999);  // استخدم كود تحقق عشوائي
+        // إرسال الكود على الإيميل (من خلال خدمة الإيميل)
+        Mail::to($user->email)->send(new VerificationCodeMail($verificationCode));
+
+        // تحديث حقل الـ "expires_at" في قاعدة البيانات
+        $user->update([
+            'verification_code' => $verificationCode,
+            'verification_code_expired' => now()->addMinutes(10),
         ]);
 
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
-
-        // Rate limiting لإعادة الإرسال
-        $key = 'resend.' . $request->email;
-        if (RateLimiter::tooManyAttempts($key, 3)) {
-            return response()->json([
-                'message' => 'Too many resend attempts. Please wait before trying again.',
-                'retry_after' => RateLimiter::availableIn($key)
-            ], 429);
-        }
-
-        try {
-            // التحقق من وجود المستخدم
-            $userExists = Doctor::where('email', $request->email)->exists() || 
-                         Patient::where('email', $request->email)->exists();
-
-            if (!$userExists) {
-                return response()->json([
-                    'message' => 'User not found'
-                ], 404);
-            }
-
-            if (!$this->emailService->sendVerificationCode($request->email)) {
-                throw new \Exception('Failed to send verification email');
-            }
-
-            RateLimiter::hit($key, 300); // 5 minutes
-
-            return response()->json([
-                'message' => 'Verification code sent successfully'
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Resend verification code failed:', [
-                'error' => $e->getMessage(),
-                'email' => $request->email
-            ]);
-
-            return response()->json([
-                'message' => 'Failed to send verification code. Please try again.'
-            ], 500);
-        }
+        return response()->json(['message' => 'Verification code sent successfully']);
     }
+
+    return response()->json(['message' => 'Verification code is still valid'], 400);
+}
+
 
     public function sendLoginCode(Request $request): JsonResponse
     {
