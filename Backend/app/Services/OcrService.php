@@ -21,21 +21,14 @@ class OcrService
 
         // تهيئة Tesseract OCR
         $ocr = new TesseractOCR($fullPath);
-        // $ocr->lang('ara', 'eng'); // دعم العربية والإنجليزية
-        $ocr->lang('eng');
-
-        // إزالة configFile('hocr') مؤقتًا لأنه يسبب تعليق
-        // $ocr->configFile('hocr');
-
-        // ⬇️ منع المهلة الطويلة أو التجمد
+        $ocr->lang('eng'); // فقط الإنجليزية
         set_time_limit(15);
+        Log::info('Starting OCR (English only)...');
+        
+        $text = $ocr->run();
+        
+        Log::info('OCR done:', ['text' => $text]);
 
-        // ⬇️ بدء التسجيل
-        Log::info('Starting OCR with Tesseract', ['file' => $fullPath]);
-
-        // تنفيذ OCR
-        //$text = $ocr->run();
-        $text = "نرمين كمال الدين\n29805231234567\nالقاهرة";
 
 
         // ⬇️ تسجيل نتيجة النص
