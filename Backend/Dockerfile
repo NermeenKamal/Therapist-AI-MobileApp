@@ -35,6 +35,9 @@ ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/4.00/tessdata/
 
 # نسخ ملفات المشروع إلى داخل الحاوية
 COPY . .
+# تثبيت Composer يدويًا داخل الحاوية
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+
 RUN composer install --no-interaction --optimize-autoloader
 
 
