@@ -344,66 +344,79 @@ class AuthController extends Controller
     }
 
     public function verifyEmail(Request $request): JsonResponse
-    {
-        $validator = Validator::make($request->all(), [
-            'email' => 'required|email',
-            'verification_code' => 'required|string|size:6'
-        ]);
+{
+    $validator = Validator::make($request->all(), [
+        'email' => 'required|email',
+        'verification_code' => 'required|string|size:6'
+    ]);
 
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
-
-        try {
-            if (!$this->emailService->verifyCode($request->email, $request->verification_code)) {
-                return response()->json([
-                    'message' => 'Invalid or expired verification code'
-                ], 400);
-            }
-
-            // تحديث حالة التفعيل
-            $updated = false;
-            
-            $doctor = Doctor::where('email', $request->email)->first();
-            if ($doctor) {
-                $doctor->email_verified = true;
-                $doctor->email_verified_at = now();
-                $doctor->save();
-                $updated = true;
-            }
-
-            if (!$updated) {
-                $patient = Patient::where('email', $request->email)->first();
-                if ($patient) {
-                    $patient->email_verified = true;
-                    $patient->email_verified_at = now();
-                    $patient->save();
-                    $updated = true;
-                }
-            }
-
-            if (!$updated) {
-                return response()->json([
-                    'message' => 'User not found'
-                ], 404);
-            }
-
-            return response()->json([
-                'message' => 'Email verified successfully. You can now log in.'
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Email verification failed:', [
-                'error' => $e->getMessage(),
-                'email' => $request->email
-            ]);
-
-            return response()->json([
-                'message' => 'Email verification failed. Please try again.'
-            ], 500);
-        }
+    if ($validator->fails()) {
+        return response()->json(['errors' => $validator->errors()], 422);
     }
 
+    try {
+        if (!$this->emailService->verifyCode($request->email, $request->verification_code)) {
+            return response()->json([
+                'message' => 'Invalid or expired verification code'
+            ], 400);
+        }
+
+        // تحديث حالة التفعيل
+        $updated = false;
+        $isDoctor = false;
+        
+        $doctor = Doctor::where('email', $request->email)->first();
+        if ($doctor) {
+            $doctor->email_verified = true;
+            $doctor->email_verified_at = now();
+            $doctor->save();
+            $updated = true;
+            $isDoctor = true;
+            
+            // إرسال رمز تحقق OCR للدكتور
+            $this->emailService->sendOcrVerificationToken($doctor->email);
+        }
+
+        if (!$updated) {
+            $patient = Patient::where('email', $request->email)->first();
+            if ($patient) {
+                $patient->email_verified = true;
+                $patient->email_verified_at = now();
+                $patient->save();
+                $updated = true;
+            }
+        }
+
+        if (!$updated) {
+            return response()->json([
+                'message' => 'User not found'
+            ], 404);
+        }
+
+        // إضافة معلومات إضافية للدكتور
+        if ($isDoctor) {
+            return response()->json([
+                'message' => 'Email verified successfully. Please complete OCR verification before logging in.',
+                'next_step' => 'ocr_verification',
+                'user_type' => 'doctor'
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Email verified successfully. You can now log in.'
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Email verification failed:', [
+            'error' => $e->getMessage(),
+            'email' => $request->email
+        ]);
+
+        return response()->json([
+            'message' => 'Email verification failed. Please try again.'
+        ], 500);
+    }
+}
     public function resendVerificationCode(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
