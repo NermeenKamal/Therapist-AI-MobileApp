@@ -12,21 +12,46 @@ class OcrService
     /**
      * استخراج البيانات من بطاقة الهوية
      */
-    public function extractIdData(UploadedFile $file): array
-{
-    try {
-        Log::info('Testing OCR fallback - no Tesseract');
-
-        return ['Test Name', '12345678901234'];
-
-    } catch (\Exception $e) {
-        Log::error('OCR fallback failed:', [
-            'error' => $e->getMessage()
-        ]);
-
-        throw new \Exception('Failed to extract data from image.');
+   public function extractIdData(UploadedFile $file): array
+    {
+        try {
+            // 1. حفظ الملف مؤقتًا في مجلد التخزين
+            $tempPath = $file->store('temp');
+            $fullPath = Storage::path($tempPath);
+    
+            // 2. تحديد وقت أقصى للتنفيذ (تجنب التعليق على Railway)
+            set_time_limit(15);
+    
+            // 3. بدء التشغيل وتسجيل البداية
+            Log::info('Starting OCR...', ['path' => $fullPath]);
+    
+            // 4. تنفيذ OCR باستخدام Tesseract
+            $text = (new TesseractOCR($fullPath))
+                ->lang('eng') // إنجليزي فقط
+                ->run();
+    
+            // 5. تسجيل النص الناتج
+            Log::info('OCR result:', ['text' => $text]);
+    
+            // 6. حذف الملف المؤقت
+            Storage::delete($tempPath);
+    
+            // 7. استخراج الاسم والرقم القومي
+            $extractedName = $this->extractName($text);
+            $extractedId = $this->extractNationalId($text);
+    
+            return [$extractedName, $extractedId];
+    
+        } catch (\Exception $e) {
+            Log::error('OCR extraction failed:', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+    
+            throw new \Exception('Failed to extract data from image: ' . $e->getMessage());
+        }
     }
-}
+
 
 
     
