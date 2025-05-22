@@ -18,13 +18,21 @@ RUN apt-get update && apt-get install -y \
     npm \
     tesseract-ocr \
     libtesseract-dev \
-    imagemagick
+    imagemagick \
+    libmagickwand-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # Optional: Arabic traineddata (in case it's not copied)
-RUN apt-get install -y tesseract-ocr-ara
+RUN apt-get update && apt-get install -y tesseract-ocr-ara tesseract-ocr-eng && rm -rf /var/lib/apt/lists/*
 
 # Install PHP extensions
-RUN docker-php-ext-install pdo pdo_mysql zip
+RUN docker-php-ext-install pdo pdo_mysql zip gd mbstring xml fileinfo
+
+# Install ImageMagick PHP extension
+RUN pecl install imagick && docker-php-ext-enable imagick
+
+# Add sodium extension (required by Laravel)
+RUN docker-php-ext-install sodium
 
 # Add Composer from official composer image
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -51,6 +59,10 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 # Set path for Tesseract language files
 ENV TESSDATA_PREFIX=/var/www/tessdata/
+
+# Set proper permissions
+RUN chown -R www-data:www-data /var/www && \
+    chmod -R 755 /var/www/storage /var/www/bootstrap/cache
 
 # Expose port (for Laravel serve)
 EXPOSE 8000
