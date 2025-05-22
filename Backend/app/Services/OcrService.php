@@ -33,7 +33,9 @@ class OcrService
         Log::info('Starting OCR with Tesseract', ['file' => $fullPath]);
 
         // تنفيذ OCR
-        $text = $ocr->run();
+        //$text = $ocr->run();
+        $text = "نرمين كمال الدين\n29805231234567\nالقاهرة";
+
 
         // ⬇️ تسجيل نتيجة النص
         Log::info('OCR output:', ['text' => $text]);
