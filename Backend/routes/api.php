@@ -30,6 +30,7 @@ Route::post('auth/login', [AuthController::class, 'login'])->name('login');
 // Email Verification Routes (Public)
 Route::post('auth/verify-email', [AuthController::class, 'verifyEmail']);
 Route::post('auth/resend-verification-code', [AuthController::class, 'resendVerificationCode']);
+Route::post('auth/request-ocr-token', [AuthController::class, 'requestOcrVerificationToken']);
 
 // OCR Routes - extract data only (Public for registration flow)
 Route::post('ocr/extract-id-data', [OcrController::class, 'extractIdData']);
