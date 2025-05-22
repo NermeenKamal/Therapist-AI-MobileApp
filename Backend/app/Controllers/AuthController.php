@@ -50,26 +50,20 @@ class AuthController extends Controller
     }
 
     try {
-        // البحث عن دكتور
+        // تسجيل دخول الدكتور
         $doctor = Doctor::where('email', $request->email)->first();
         if ($doctor && Hash::check($request->password, $doctor->password)) {
+
             if (!$doctor->email_verified) {
                 return response()->json([
-                    'message' => 'Please verify your email first',
+                    'message' => 'Please verify your email first.',
                     'status' => 'email_not_verified'
-                ], 403);
-            }
-
-            if (!$doctor->isLicenseVerified()) {
-                return response()->json([
-                    'message' => 'Your account is pending verification by the Ministry of Health',
-                    'status' => 'license_not_verified'
                 ], 403);
             }
 
             if (!$doctor->is_verified_by_ocr) {
                 return response()->json([
-                    'message' => 'Please complete OCR identity verification first',
+                    'message' => 'Please complete OCR verification before logging in.',
                     'status' => 'ocr_not_verified'
                 ], 403);
             }
@@ -78,19 +72,20 @@ class AuthController extends Controller
             $token = $doctor->createToken('auth_token')->plainTextToken;
 
             return response()->json([
-                'message' => 'Logged in successfully as doctor',
+                'message' => 'Logged in successfully as doctor.',
                 'user' => $doctor->makeHidden(['password']),
                 'user_type' => 'doctor',
                 'token' => $token
             ]);
         }
 
-        // البحث عن مريض
+        // تسجيل دخول المريض
         $patient = Patient::where('email', $request->email)->first();
         if ($patient && Hash::check($request->password, $patient->password)) {
+
             if (!$patient->email_verified) {
                 return response()->json([
-                    'message' => 'Please verify your email first',
+                    'message' => 'Please verify your email first.',
                     'status' => 'email_not_verified'
                 ], 403);
             }
@@ -99,7 +94,7 @@ class AuthController extends Controller
             $token = $patient->createToken('auth_token')->plainTextToken;
 
             return response()->json([
-                'message' => 'Logged in successfully as patient',
+                'message' => 'Logged in successfully as patient.',
                 'user' => $patient->makeHidden(['password']),
                 'user_type' => 'patient',
                 'token' => $token
@@ -108,7 +103,7 @@ class AuthController extends Controller
 
         RateLimiter::hit($key);
         return response()->json([
-            'message' => 'Invalid credentials'
+            'message' => 'Invalid credentials.'
         ], 401);
 
     } catch (\Exception $e) {
