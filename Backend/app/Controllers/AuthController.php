@@ -234,9 +234,15 @@ class AuthController extends Controller
 
             // رفع الصورة على Cloudinary
             $medicalLicensePath = null;
-            if ($request->hasFile('medical_license_path')) {
-                $file = $request->file('medical_license_path');
-                $medicalLicensePath = $this->cloudinaryService->uploadFile($file, 'medical_licenses');
+            try {
+                if ($request->hasFile('medical_license_path')) {
+                    $file = $request->file('medical_license_path');
+                    $medicalLicensePath = $this->cloudinaryService->uploadFile($file, 'medical_licenses');
+                    Log::info('Cloudinary Upload Successful: ' . $medicalLicensePath);
+                }
+            } catch (\Exception $e) {
+                Log::error('Cloudinary Upload Failed: ' . $e->getMessage());
+                throw $e;
             }
 
             // إنشاء حساب الطبيب
