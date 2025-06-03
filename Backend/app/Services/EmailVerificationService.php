@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use App\Models\Doctor;
 use Exception;
+use Illuminate\Support\Str;
 
 class EmailVerificationService
 {
