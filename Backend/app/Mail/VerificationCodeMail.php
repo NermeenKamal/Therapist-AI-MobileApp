@@ -19,7 +19,12 @@ class VerificationCodeMail extends Mailable
 
     public function build()
     {
+        $message = "Verification Code\n\n";
+        $message .= "Your verification code is: {$this->verificationCode}\n\n";
+        $message .= "This code will expire in 10 minutes.\n\n";
+        $message .= "If you didn't request this code, please ignore this email.";
+
         return $this->subject('Verification Code')
-                    ->view('emails.verification-code');
+                    ->text([], $message);
     }
 }
