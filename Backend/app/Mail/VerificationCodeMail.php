@@ -25,6 +25,6 @@ class VerificationCodeMail extends Mailable
         $message .= "If you didn't request this code, please ignore this email.";
 
         return $this->subject('Verification Code')
-                    ->text([], $message);
+                    ->setBody($message, 'text/plain'); // ✅ إرسال نص بدون view
     }
 }
