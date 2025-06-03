@@ -9,7 +9,6 @@ use App\Models\Doctor;
 use Exception;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
-use App\Mail\OcrVerificationMail;
 
 class EmailVerificationService
 {
