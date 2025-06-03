@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Mail;
 
 use Illuminate\Bus\Queueable;
@@ -18,11 +19,12 @@ class VerificationCodeMail extends Mailable
 
     public function build()
     {
-        $message = "Your verification code is: {$this->verificationCode}\n\n";
+        $message = "Verification Code\n\n";
+        $message .= "Your verification code is: {$this->verificationCode}\n\n";
         $message .= "This code will expire in 10 minutes.\n\n";
         $message .= "If you didn't request this code, please ignore this email.";
 
-        return $this->subject('كود التفعيل - Verification Code')
-                    ->text($message);
+        return $this->subject('Verification Code')
+                    ->text([], $message);
     }
 }
