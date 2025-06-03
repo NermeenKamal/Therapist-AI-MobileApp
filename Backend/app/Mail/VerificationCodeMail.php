@@ -19,12 +19,20 @@ class VerificationCodeMail extends Mailable
 
     public function build()
     {
-        $message = "Verification Code\n\n";
-        $message .= "Your verification code is: {$this->verificationCode}\n\n";
-        $message .= "This code will expire in 10 minutes.\n\n";
-        $message .= "If you didn't request this code, please ignore this email.";
+        $html = "
+            <html>
+                <body style='font-family: Arial, sans-serif; color: #333;'>
+                    <h2>Verification Code</h2>
+                    <p>Your verification code is: 
+                        <strong style='font-size: 20px; color: #2d3748;'>{$this->verificationCode}</strong>
+                    </p>
+                    <p>This code will expire in 10 minutes.</p>
+                    <p>If you didn't request this code, please ignore this email.</p>
+                </body>
+            </html>
+        ";
 
         return $this->subject('Verification Code')
-                    ->setBody($message, 'text/plain'); // ✅ إرسال نص بدون view
+                    ->html($html); // ✅ إرسال كود HTML مباشرة
     }
 }
