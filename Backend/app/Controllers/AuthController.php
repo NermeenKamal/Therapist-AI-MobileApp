@@ -373,8 +373,6 @@ class AuthController extends Controller
             $updated = true;
             $isDoctor = true;
             
-            // إرسال رمز تحقق OCR للدكتور
-            $this->emailService->sendOcrVerificationToken($doctor->email);
         }
 
         if (!$updated) {
