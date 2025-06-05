@@ -407,15 +407,18 @@ class AuthController extends Controller
         ]);
 
     } catch (\Exception $e) {
-        Log::error('Email verification failed:', [
-            'error' => $e->getMessage(),
-            'email' => $request->email
-        ]);
+    Log::error('Email verification failed:', [
+        'error' => $e->getMessage(),
+        'email' => $request->email,
+        'trace' => $e->getTraceAsString(),
+    ]);
 
-        return response()->json([
-            'message' => 'Email verification failed. Please try again.'
-        ], 500);
-    }
+    return response()->json([
+        'message' => 'Email verification failed. Please try again.',
+        'debug' => app()->environment('local') ? $e->getMessage() : null
+    ], 500);
+}
+
 }
     public function resendVerificationCode(Request $request): JsonResponse
     {
