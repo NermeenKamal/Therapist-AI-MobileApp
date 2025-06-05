@@ -196,40 +196,4 @@ class EmailVerificationService
         return $code;
     }
 
-    public function sendOcrVerificationToken($email)
-    {
-        $doctor = Doctor::where('email', $email)->first();
-        
-        if (!$doctor || !$doctor->email_verified) {
-            return false;
-        }
-        
-        // إنشاء رمز تحقق جديد
-        $token = Str::random(32);
-        
-        // تخزين الرمز في قاعدة البيانات مع وقت انتهاء الصلاحية
-        DB::table('ocr_verification_tokens')->updateOrInsert(
-            ['email' => $email],
-            [
-                'token' => $token,
-                'expires_at' => now()->addHours(24)
-            ]
-        );
-        
-        // إرسال الرمز بالبريد الإلكتروني
-        Mail::to($email)->send(new OcrVerificationMail($token));
-        
-        return true;
-    }
-
-    public function verifyOcrToken($email, $token)
-    {
-        $record = DB::table('ocr_verification_tokens')
-            ->where('email', $email)
-            ->where('token', $token)
-            ->where('expires_at', '>', now())
-            ->first();
-        
-        return $record !== null;
-    }
-}
+   
