@@ -401,8 +401,10 @@ class AuthController extends Controller
         }
 
         return response()->json([
-            'message' => 'Email verified successfully. You can now log in.'
-        ]);
+        'message' => 'Email verified successfully. Please upload your ID card for OCR verification.',
+        'next_step' => 'ocr_upload',
+        'user_type' => 'doctor'
+    ]);
 
     } catch (\Exception $e) {
     Log::error('Email verification failed:', [
