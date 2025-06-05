@@ -196,4 +196,4 @@ class EmailVerificationService
         return $code;
     }
 
-   
+}
