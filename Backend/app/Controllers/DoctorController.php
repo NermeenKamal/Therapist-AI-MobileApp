@@ -357,92 +357,84 @@ class DoctorController extends Controller
     }
 
     // جلب تفاصيل دكتور واحد - مُحدث
-     public function show($id): JsonResponse
-    {
-        try {
-            Log::info('Fetching doctor details', ['doctor_id' => $id]);
-            
-            // جلب البيانات مع تحديد الحقول المطلوبة فقط
-            $doctor = Doctor::select([
-                'id',
-                'name',
-                'email',
-                'mobile_number',
-                'specialization',
-                'bio',
-                'clinic_address',
-                'session_price',
-                'profile_image',
-                'medical_license_path',
-                'license_number',
-                'email_verified',
-                'is_verified_by_ocr',
-                'created_at'
-            ])->find($id);
 
-            if (!$doctor) {
-                Log::warning('Doctor not found', ['doctor_id' => $id]);
-                return response()->json([
-                    'message' => 'Doctor not found',
-                    'success' => false
-                ], 404);
-            }
+// جلب تفاصيل دكتور واحد - مُحدث
+public function show($id): JsonResponse
+{
+    try {
+        Log::info('Fetching doctor details', ['doctor_id' => $id]);
+        
+        // جلب البيانات مع تحديد الحقول المطلوبة فقط
+        $doctor = Doctor::select([
+            'id',
+            'name',
+            'email',
+            'mobile_number',
+            'specialization',
+            'bio',
+            'clinic_address',
+            'session_price',
+            'profile_image',
+            'medical_license_path',
+            'license_number',
+            'email_verified',
+            'is_verified_by_ocr',
+            'created_at'
+        ])->find($id);
 
-            // جلب الجداول الزمنية
-            $schedules = DoctorSchedule::where('doctor_id', $doctor->id)
-                ->select(['id', 'day', 'start_time', 'end_time'])
-                ->get();
-
-            // حساب متوسط التقييم
-            $avgRating = ChatRating::where('doctor_id', $doctor->id)
-                ->avg('sentiment_score');
-            $ratingsCount = ChatRating::where('doctor_id', $doctor->id)
-                ->count();
-
-            // بناء هيكل البيانات للإرجاع
-            $responseData = [
-                'id' => $doctor->id,
-                'name' => $doctor->name,
-                'email' => $doctor->email,
-                'mobile_number' => $doctor->mobile_number,
-                'specialization' => $doctor->specialization,
-                'bio' => $doctor->bio,
-                'clinic_address' => $doctor->clinic_address,
-                'session_price' => $doctor->session_price,
-                'profile_image' => $doctor->profile_image,
-                'medical_license' => $doctor->medical_license_path,
-                'license_number' => $doctor->license_number,
-                'schedules' => $schedules,
-                'average_rating' => $avgRating ? round($avgRating, 2) : null,
-                'ratings_count' => $ratingsCount,
-                'verification' => [
-                    'email_verified' => (bool)$doctor->email_verified,
-                    'ocr_verified' => (bool)$doctor->is_verified_by_ocr
-                ],
-                'joined_at' => $doctor->created_at->format('Y-m-d')
-            ];
-
-            Log::info('Successfully fetched doctor details', ['doctor_id' => $id]);
-            
-            return response()->json([
-                'data' => $responseData,
-                'success' => true
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Failed to fetch doctor details', [
-                'doctor_id' => $id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            
-            return response()->json([
-                'message' => 'Internal server error',
-                'success' => false,
-                'error' => env('APP_DEBUG') ? $e->getMessage() : null
-            ], 500);
+        if (!$doctor) {
+            Log::warning('Doctor not found', ['doctor_id' => $id]);
+            return response()->json([], 404); // إرجاع array فارغ بدلاً من object
         }
+
+        // جلب الجداول الزمنية
+        $schedules = DoctorSchedule::where('doctor_id', $doctor->id)
+            ->select(['id', 'day', 'start_time', 'end_time'])
+            ->get();
+
+        // حساب متوسط التقييم
+        $avgRating = ChatRating::where('doctor_id', $doctor->id)
+            ->avg('sentiment_score');
+        $ratingsCount = ChatRating::where('doctor_id', $doctor->id)
+            ->count();
+
+        // بناء هيكل البيانات للإرجاع (نفس format الـ index)
+        $responseData = [
+            'id' => $doctor->id,
+            'name' => $doctor->name,
+            'profile_image' => $doctor->profile_image,
+            'specialization' => $doctor->specialization,
+            'session_price' => $doctor->session_price,
+            'bio' => $doctor->bio,
+            'clinic_address' => $doctor->clinic_address,
+            'average_rating' => $avgRating ? round($avgRating, 2) : null,
+            'ratings_count' => $ratingsCount,
+            'email_verified' => $doctor->email_verified,
+            'is_verified_by_ocr' => $doctor->is_verified_by_ocr,
+            // معلومات إضافية للـ show
+            'email' => $doctor->email,
+            'mobile_number' => $doctor->mobile_number,
+            'medical_license' => $doctor->medical_license_path,
+            'license_number' => $doctor->license_number,
+            'schedules' => $schedules,
+            'joined_at' => $doctor->created_at->format('Y-m-d')
+        ];
+
+        Log::info('Successfully fetched doctor details', ['doctor_id' => $id]);
+        
+        // إرجاع البيانات مباشرة كـ array (مثل index method)
+        return response()->json([$responseData]);
+
+    } catch (\Exception $e) {
+        Log::error('Failed to fetch doctor details', [
+            'doctor_id' => $id,
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        
+        return response()->json([], 500); // إرجاع array فارغ في حالة الخطأ
     }
+}
 
     // إضافة method لفحص البيانات الأساسية للـ index
     public function debugIndex(Request $request): JsonResponse
