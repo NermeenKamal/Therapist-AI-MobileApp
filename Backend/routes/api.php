@@ -18,7 +18,17 @@ use App\Controllers\ArticleController;
 use App\Controllers\FCMController;
 use App\Controllers\PatientController;
 
-// reset password routes
+// Health check endpoint
+Route::get('/health', function () {
+    return response()->json([
+        'status' => 'healthy',
+        'timestamp' => now()->toISOString(),
+        'app_name' => config('app.name'),
+        'version' => '1.0.0'
+    ]);
+});
+
+// Reset password routes
 Route::post('/forgot-password', [ForgotPasswordController::class, 'sendResetCode']);
 Route::post('/reset-password', [ForgotPasswordController::class, 'reset'])->name('password.reset');
 
@@ -34,8 +44,15 @@ Route::post('auth/request-ocr-token', [AuthController::class, 'requestOcrVerific
 
 // OCR Routes - extract data only (Public for registration flow)
 Route::post('ocr/extract-id-data', [OcrController::class, 'extractIdData']);
-
 Route::post('ocr/verify-extracted-data', [OcrController::class, 'verifyExtractedData']);
+
+// Public Doctor Routes (for browsing without authentication)
+Route::prefix('public')->group(function () {
+    Route::get('/doctors', [DoctorController::class, 'index']);
+    Route::get('/doctors/{id}', [DoctorController::class, 'show'])->where('id', '[0-9]+');
+    Route::get('/specializations', [AppointmentController::class, 'specializations']);
+    Route::get('/articles', [ArticleController::class, 'index']);
+});
 
 // Protected Routes
 Route::middleware('auth:sanctum')->group(function () {
@@ -61,7 +78,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/patient/profile', [PatientController::class, 'updateProfile']);
     Route::get('/patient/profile', [PatientController::class, 'showProfile']);
     
-    // Chat - نظام المحادثات المُحسَّن مع Firebase
+    // Chat - Enhanced messaging system with Firebase
     Route::post('chat/send', [ChatController::class, 'sendMessage']);
     Route::get('chat/appointment/{appointmentId}', [ChatController::class, 'getMessages']);
     Route::post('chat/read', [ChatController::class, 'markAsRead']);
@@ -92,7 +109,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/doctor/schedule/{id}', [DoctorScheduleController::class, 'update']);
     Route::delete('/doctor/schedule/{id}', [DoctorScheduleController::class, 'destroy']);
 
-    // Doctor Routes
+    // Protected Doctor Routes (require authentication)
     Route::post('/doctor/update-profile', [DoctorController::class, 'updateProfile']);
     Route::get('/doctors', [DoctorController::class, 'index']);
     Route::get('/doctors/{id}', [DoctorController::class, 'show'])->where('id', '[0-9]+');
@@ -101,35 +118,61 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/articles', [ArticleController::class, 'index']);
 });
 
-// Debug Routes (remove in production)
-if (app()->environment('local')) {
-    Route::get('test-email/{email}', function ($email) {
-        $emailService = new \App\Services\EmailVerificationService();
-        return $emailService->sendVerificationCode($email) ? 'Email sent!' : 'Failed to send email';
-    });
-    
-    // Debug route للتحقق من حالة المستخدم
-    Route::get('debug/user/{email}', function ($email) {
-        $doctor = \App\Models\Doctor::where('email', $email)->first();
-        if ($doctor) {
-            return response()->json([
-                'type' => 'doctor',
-                'email_verified' => $doctor->email_verified,
-                'is_verified_by_ocr' => $doctor->is_verified_by_ocr,
-                'email_verified_at' => $doctor->email_verified_at,
-                'ocr_verified_at' => $doctor->ocr_verified_at ?? 'Not set'
-            ]);
-        }
+// Development/Testing Routes
+if (app()->environment(['local', 'staging'])) {
+    Route::prefix('debug')->group(function () {
+        // Test email sending
+        Route::get('test-email/{email}', function ($email) {
+            $emailService = new \App\Services\EmailVerificationService();
+            return $emailService->sendVerificationCode($email) ? 'Email sent!' : 'Failed to send email';
+        });
         
-        $patient = \App\Models\Patient::where('email', $email)->first();
-        if ($patient) {
-            return response()->json([
-                'type' => 'patient',
-                'email_verified' => $patient->email_verified,
-                'email_verified_at' => $patient->email_verified_at
-            ]);
-        }
+        // Check user status by email
+        Route::get('user/{email}', function ($email) {
+            $doctor = \App\Models\Doctor::where('email', $email)->first();
+            if ($doctor) {
+                return response()->json([
+                    'type' => 'doctor',
+                    'email_verified' => $doctor->email_verified,
+                    'is_verified_by_ocr' => $doctor->is_verified_by_ocr,
+                    'email_verified_at' => $doctor->email_verified_at,
+                    'ocr_verified_at' => $doctor->ocr_verified_at ?? 'Not set'
+                ]);
+            }
+            
+            $patient = \App\Models\Patient::where('email', $email)->first();
+            if ($patient) {
+                return response()->json([
+                    'type' => 'patient',
+                    'email_verified' => $patient->email_verified,
+                    'email_verified_at' => $patient->email_verified_at
+                ]);
+            }
+            
+            return response()->json(['message' => 'User not found'], 404);
+        });
+
+        // Test Cloudinary configuration
+        Route::get('cloudinary-config', [DoctorController::class, 'testCloudinaryConfig']);
         
-        return response()->json(['message' => 'User not found'], 404);
+        // Test database connection
+        Route::get('db-test', function () {
+            try {
+                $doctorCount = \App\Models\Doctor::count();
+                $patientCount = \App\Models\Patient::count();
+                return response()->json([
+                    'status' => 'success',
+                    'database_connected' => true,
+                    'doctors_count' => $doctorCount,
+                    'patients_count' => $patientCount
+                ]);
+            } catch (\Exception $e) {
+                return response()->json([
+                    'status' => 'error',
+                    'database_connected' => false,
+                    'error' => $e->getMessage()
+                ], 500);
+            }
+        });
     });
 }
