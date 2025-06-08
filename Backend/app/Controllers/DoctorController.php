@@ -309,10 +309,10 @@ class DoctorController extends Controller
             // Get schedules with error handling
             $schedules = [];
             try {
-                $schedules = DoctorSchedule::where('doctor_id', $doctor->id)
-                    ->select(['id', 'day', 'start_time', 'end_time'])
-                    ->get()
-                    ->toArray();
+                $appointments = Appointment::where('doctor_id', $doctor->id)
+                    ->with(['patient:id,name,profile_image'])      // لجلب بيانات المريض إن وُجد
+                    ->orderBy('appointment_date', 'asc')
+                    ->get(['id', 'patient_id', 'appointment_date', 'status', 'notes', 'price']);
             } catch (Exception $scheduleError) {
                 Log::warning('Failed to fetch doctor schedules', [
                     'doctor_id' => $id,
@@ -347,7 +347,7 @@ class DoctorController extends Controller
                 'average_rating' => $avgRating ? round($avgRating, 2) : null,
                 'ratings_count' => $ratingsCount,
                 'license_number' => $doctor->license_number,
-                'schedules' => $schedules,
+                'schedules' => $appointments,
             ];
 
             Log::info('Successfully fetched doctor details', [
