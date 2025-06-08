@@ -216,7 +216,10 @@ public function confirm(Request $request, int $id): JsonResponse
             ]);
         }
 
-        return response()->json($appointment);
+        return response()->json([
+        'message' => 'Appointment updated successfully',
+        'appointment' => new AppointmentResource($appointment->load(['doctor', 'patient']))
+    ]);
     }
 
     // جلب التخصصات
