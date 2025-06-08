@@ -32,56 +32,85 @@ class ChatController extends Controller
 
 
 
-    public function sendMessage(Request $request): JsonResponse
+   public function sendMessage(Request $request): JsonResponse
 {
+    \Log::info('sendMessage called');
+
+    $user = Auth::user();
+    if (!$user) {
+        \Log::warning('No authenticated user found.');
+        return response()->json(['error' => 'Unauthenticated user'], 401);
+    }
+    \Log::info('Authenticated user:', ['id' => $user->id, 'role' => $user->role]);
+
     $data = $request->validate([
         'appointment_id' => 'required|exists:appointments,id',
         'message' => 'required|string',
     ]);
+    \Log::info('Validated data:', $data);
 
-    $user = Auth::user();
-    $userType = $user->role;
-
-    if ($userType === 'doctor') {
+    if ($user->role === 'doctor') {
         $senderType = 'doctor';
-        $senderId = $user->doctor->id;
+        $senderId = $user->doctor->id ?? null;
+        if (!$senderId) {
+            \Log::error('Doctor ID not found for user.');
+            return response()->json(['error' => 'Doctor profile not found'], 400);
+        }
         $appointment = \App\Models\Appointment::find($data['appointment_id']);
         $receiverType = 'patient';
         $receiverId = $appointment->patient_id;
         $receiver = Patient::find($receiverId);
     } else {
         $senderType = 'patient';
-        $senderId = $user->patient->id;
+        $senderId = $user->patient->id ?? null;
+        if (!$senderId) {
+            \Log::error('Patient ID not found for user.');
+            return response()->json(['error' => 'Patient profile not found'], 400);
+        }
         $appointment = \App\Models\Appointment::find($data['appointment_id']);
         $receiverType = 'doctor';
         $receiverId = $appointment->doctor_id;
         $receiver = Doctor::find($receiverId);
     }
-
-    // إنشاء الرسالة في قاعدة بيانات MySQL
-    $chat = ChatMessage::create([
-        'appointment_id' => $data['appointment_id'],
+    \Log::info('Sender and receiver info', [
         'sender_type' => $senderType,
         'sender_id' => $senderId,
-        'message' => $data['message'],
-        'is_read' => false,
+        'receiver_type' => $receiverType,
+        'receiver_id' => $receiverId,
     ]);
-    \Log::info('Chat message created', $chat->toArray());
 
-    // تحليل المشاعر (لو المرسل دكتور)
-    $rating = null;
-    if ($senderType === 'doctor') {
-        $bertResult = $this->bert->analyze($data['message']);
-
-        $rating = ChatRating::create([
+    try {
+        $chat = ChatMessage::create([
             'appointment_id' => $data['appointment_id'],
-            'patient_id' => $receiverId,
-            'sentiment_score' => $bertResult['score'],
-            'sentiment_label' => $bertResult['label'],
+            'sender_type' => $senderType,
+            'sender_id' => $senderId,
+            'message' => $data['message'],
+            'is_read' => false,
         ]);
+        \Log::info('Chat message created', $chat->toArray());
+    } catch (\Exception $e) {
+        \Log::error('Failed to create chat message: ' . $e->getMessage());
+        return response()->json(['error' => 'Failed to save message'], 500);
     }
 
-    // إرسال الرسالة إلى Firebase Realtime Database
+    $rating = null;
+    if ($senderType === 'doctor') {
+        try {
+            $bertResult = $this->bert->analyze($data['message']);
+            \Log::info('BERT analysis result', $bertResult);
+
+            $rating = ChatRating::create([
+                'appointment_id' => $data['appointment_id'],
+                'patient_id' => $receiverId,
+                'sentiment_score' => $bertResult['score'],
+                'sentiment_label' => $bertResult['label'],
+            ]);
+            \Log::info('Chat rating saved', $rating->toArray());
+        } catch (\Exception $e) {
+            \Log::error('BERT analysis or rating save failed: ' . $e->getMessage());
+        }
+    }
+
     try {
         $firebaseBase = 'https://therapist-app-4c42e-default-rtdb.firebaseio.com/';
         $firebasePath = $firebaseBase . 'messages/' . $data['appointment_id'] . '.json';
@@ -94,40 +123,49 @@ class ChatController extends Controller
         ];
 
         $client = new \GuzzleHttp\Client();
-        $client->post($firebasePath, [
+        $responseFirebase = $client->post($firebasePath, [
             'json' => $firebaseMessage
         ]);
+        \Log::info('Firebase response status: ' . $responseFirebase->getStatusCode());
+        \Log::info('Firebase response body: ' . $responseFirebase->getBody()->getContents());
     } catch (\Exception $e) {
-        // سجل الخطأ بدون تعطيل العملية
         \Log::error('Firebase Error: ' . $e->getMessage());
     }
 
-    // إرسال إشعار FCM لو فيه توكن
     if ($receiver && $receiver->fcm_token) {
-        $senderName = ($senderType === 'doctor') ? $user->doctor->name : $user->patient->name;
+        try {
+            $senderName = ($senderType === 'doctor') ? $user->doctor->name : $user->patient->name;
 
-        $this->fcm->sendToUser(
-            $receiver->fcm_token,
-            'رسالة جديدة',
-            $senderName . ': ' . substr($chat->message, 0, 50),
-            [
-                'chat_id' => $chat->id,
-                'appointment_id' => $data['appointment_id'],
-                'sender_type' => $senderType,
-                'sender_id' => $senderId
-            ]
-        );
+            $this->fcm->sendToUser(
+                $receiver->fcm_token,
+                'رسالة جديدة',
+                $senderName . ': ' . substr($chat->message, 0, 50),
+                [
+                    'chat_id' => $chat->id,
+                    'appointment_id' => $data['appointment_id'],
+                    'sender_type' => $senderType,
+                    'sender_id' => $senderId
+                ]
+            );
+            \Log::info('FCM notification sent to token: ' . $receiver->fcm_token);
+        } catch (\Exception $e) {
+            \Log::error('FCM send error: ' . $e->getMessage());
+        }
+    } else {
+        \Log::info('No FCM token found for receiver or receiver not found.');
     }
 
-    // تحضير الرد النهائي
     $response = $chat->toArray();
     if ($rating) {
         $response['sentiment_score'] = $rating->sentiment_score;
         $response['sentiment_label'] = $rating->sentiment_label;
     }
 
+    \Log::info('sendMessage response', $response);
+
     return response()->json($response, 201);
 }
+
 
     
     // public function sendMessage(Request $request): JsonResponse
