@@ -343,6 +343,9 @@ class AuthController extends Controller
         }
     }
 
+
+
+    
     public function verifyEmail(Request $request): JsonResponse
 {
     $validator = Validator::make($request->all(), [
@@ -365,6 +368,7 @@ class AuthController extends Controller
         $updated = false;
         $isDoctor = false;
         
+        // التحقق من الدكتور أولاً
         $doctor = Doctor::where('email', $request->email)->first();
         if ($doctor) {
             $doctor->email_verified = true;
@@ -373,8 +377,13 @@ class AuthController extends Controller
             $updated = true;
             $isDoctor = true;
             
+            Log::info('Doctor email verified:', [
+                'doctor_id' => $doctor->id,
+                'email' => $doctor->email
+            ]);
         }
 
+        // إذا لم يكن دكتور، تحقق من المريض
         if (!$updated) {
             $patient = Patient::where('email', $request->email)->first();
             if ($patient) {
@@ -382,6 +391,11 @@ class AuthController extends Controller
                 $patient->email_verified_at = now();
                 $patient->save();
                 $updated = true;
+                
+                Log::info('Patient email verified:', [
+                    'patient_id' => $patient->id,
+                    'email' => $patient->email
+                ]);
             }
         }
 
@@ -391,34 +405,38 @@ class AuthController extends Controller
             ], 404);
         }
 
-        // إضافة معلومات إضافية للدكتور
+        // رسائل مختلفة حسب نوع المستخدم
         if ($isDoctor) {
             return response()->json([
                 'message' => 'Email verified successfully. Please complete OCR verification before logging in.',
                 'next_step' => 'ocr_verification',
                 'user_type' => 'doctor'
             ]);
+        } else {
+            // رسالة للمريض
+            return response()->json([
+                'message' => 'Email verified successfully. You can now log in.',
+                'next_step' => 'login',
+                'user_type' => 'patient'
+            ]);
         }
 
-        return response()->json([
-        'message' => 'Email verified successfully. Please upload your ID card for OCR verification.',
-        'next_step' => 'ocr_upload',
-        'user_type' => 'doctor'
-    ]);
-
     } catch (\Exception $e) {
-    Log::error('Email verification failed:', [
-        'error' => $e->getMessage(),
-        'email' => $request->email,
-        'trace' => $e->getTraceAsString(),
-    ]);
+        Log::error('Email verification failed:', [
+            'error' => $e->getMessage(),
+            'email' => $request->email,
+            'trace' => $e->getTraceAsString(),
+        ]);
 
-    return response()->json([
-        'message' => 'Email verification failed. Please try again.',
-        'debug' => app()->environment('local') ? $e->getMessage() : null
-    ], 500);
+        return response()->json([
+            'message' => 'Email verification failed. Please try again.',
+            'debug' => app()->environment('local') ? $e->getMessage() : null
+        ], 500);
+    }
 }
 
+
+    
 }
     public function resendVerificationCode(Request $request): JsonResponse
     {
