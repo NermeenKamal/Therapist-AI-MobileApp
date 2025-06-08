@@ -29,94 +29,194 @@ class ChatController extends Controller
      * @param Request $request
      * @return JsonResponse
      */
+
+
+
     public function sendMessage(Request $request): JsonResponse
-    {
-        $data = $request->validate([
-            'appointment_id' => 'required|exists:appointments,id',
-            'message' => 'required|string',
-        ]);
-        
-        $user = Auth::user();
-        $userType = $user->role;
-        
-        // تحديد نوع المرسل والمستقبل
-        if ($userType === 'doctor') {
-            $senderType = 'doctor';
-            $senderId = $user->doctor->id;
-            
-            // الحصول على معرف المريض من الموعد
-            $appointment = \App\Models\Appointment::find($data['appointment_id']);
-            $receiverType = 'patient';
-            $receiverId = $appointment->patient_id;
-            
-            // جلب معلومات المريض
-            $receiver = Patient::find($receiverId);
-        } else {
-            $senderType = 'patient';
-            $senderId = $user->patient->id;
-            
-            // الحصول على معرف الدكتور من الموعد
-            $appointment = \App\Models\Appointment::find($data['appointment_id']);
-            $receiverType = 'doctor';
-            $receiverId = $appointment->doctor_id;
-            
-            // جلب معلومات الدكتور
-            $receiver = Doctor::find($receiverId);
-        }
-        
-        // إنشاء رسالة الدردشة
-        $chat = ChatMessage::create([
+{
+    $data = $request->validate([
+        'appointment_id' => 'required|exists:appointments,id',
+        'message' => 'required|string',
+    ]);
+
+    $user = Auth::user();
+    $userType = $user->role;
+
+    if ($userType === 'doctor') {
+        $senderType = 'doctor';
+        $senderId = $user->doctor->id;
+        $appointment = \App\Models\Appointment::find($data['appointment_id']);
+        $receiverType = 'patient';
+        $receiverId = $appointment->patient_id;
+        $receiver = Patient::find($receiverId);
+    } else {
+        $senderType = 'patient';
+        $senderId = $user->patient->id;
+        $appointment = \App\Models\Appointment::find($data['appointment_id']);
+        $receiverType = 'doctor';
+        $receiverId = $appointment->doctor_id;
+        $receiver = Doctor::find($receiverId);
+    }
+
+    // إنشاء الرسالة في قاعدة بيانات MySQL
+    $chat = ChatMessage::create([
+        'appointment_id' => $data['appointment_id'],
+        'sender_type' => $senderType,
+        'sender_id' => $senderId,
+        'message' => $data['message'],
+        'is_read' => false,
+    ]);
+
+    // تحليل المشاعر (لو المرسل دكتور)
+    $rating = null;
+    if ($senderType === 'doctor') {
+        $bertResult = $this->bert->analyze($data['message']);
+
+        $rating = ChatRating::create([
             'appointment_id' => $data['appointment_id'],
+            'patient_id' => $receiverId,
+            'sentiment_score' => $bertResult['score'],
+            'sentiment_label' => $bertResult['label'],
+        ]);
+    }
+
+    // إرسال الرسالة إلى Firebase Realtime Database
+    try {
+        $firebaseBase = 'https://therapist-app-4c42e-default-rtdb.firebaseio.com/';
+        $firebasePath = $firebaseBase . 'messages/' . $data['appointment_id'] . '.json';
+
+        $firebaseMessage = [
             'sender_type' => $senderType,
             'sender_id' => $senderId,
             'message' => $data['message'],
-            'is_read' => false,
+            'timestamp' => now()->toISOString(),
+        ];
+
+        $client = new \GuzzleHttp\Client();
+        $client->post($firebasePath, [
+            'json' => $firebaseMessage
         ]);
-        
-        // تحليل المشاعر إذا كان المرسل هو الدكتور
-        $rating = null;
-        if ($senderType === 'doctor') {
-            $bertResult = $this->bert->analyze($data['message']);
-            
-            $rating = ChatRating::create([
-                'appointment_id' => $data['appointment_id'],
-                'patient_id' => $receiverId,
-                'sentiment_score' => $bertResult['score'],
-                'sentiment_label' => $bertResult['label'],
-            ]);
-        }
-        
-        // إرسال إشعار بواسطة FCM
-        if ($receiver && $receiver->fcm_token) {
-            // استخراج اسم المرسل
-            if ($senderType === 'doctor') {
-                $senderName = $user->doctor->name;
-            } else {
-                $senderName = $user->patient->name;
-            }
-            
-            $this->fcm->sendToUser(
-                $receiver->fcm_token,
-                'رسالة جديدة',
-                $senderName . ': ' . substr($chat->message, 0, 50),
-                [
-                    'chat_id' => $chat->id,
-                    'appointment_id' => $data['appointment_id'],
-                    'sender_type' => $senderType,
-                    'sender_id' => $senderId
-                ]
-            );
-        }
-        
-        // تحضير الرد
-        $response = $chat->toArray();
-        if ($rating) {
-            $response['sentiment_score'] = $rating->sentiment_score;
-            $response['sentiment_label'] = $rating->sentiment_label;
-        }
-        
-        return response()->json($response, 201);
+    } catch (\Exception $e) {
+        // سجل الخطأ بدون تعطيل العملية
+        \Log::error('Firebase Error: ' . $e->getMessage());
     }
+
+    // إرسال إشعار FCM لو فيه توكن
+    if ($receiver && $receiver->fcm_token) {
+        $senderName = ($senderType === 'doctor') ? $user->doctor->name : $user->patient->name;
+
+        $this->fcm->sendToUser(
+            $receiver->fcm_token,
+            'رسالة جديدة',
+            $senderName . ': ' . substr($chat->message, 0, 50),
+            [
+                'chat_id' => $chat->id,
+                'appointment_id' => $data['appointment_id'],
+                'sender_type' => $senderType,
+                'sender_id' => $senderId
+            ]
+        );
+    }
+
+    // تحضير الرد النهائي
+    $response = $chat->toArray();
+    if ($rating) {
+        $response['sentiment_score'] = $rating->sentiment_score;
+        $response['sentiment_label'] = $rating->sentiment_label;
+    }
+
+    return response()->json($response, 201);
+}
+
+    
+    // public function sendMessage(Request $request): JsonResponse
+    // {
+    //     $data = $request->validate([
+    //         'appointment_id' => 'required|exists:appointments,id',
+    //         'message' => 'required|string',
+    //     ]);
+        
+    //     $user = Auth::user();
+    //     $userType = $user->role;
+        
+    //     // تحديد نوع المرسل والمستقبل
+    //     if ($userType === 'doctor') {
+    //         $senderType = 'doctor';
+    //         $senderId = $user->doctor->id;
+            
+    //         // الحصول على معرف المريض من الموعد
+    //         $appointment = \App\Models\Appointment::find($data['appointment_id']);
+    //         $receiverType = 'patient';
+    //         $receiverId = $appointment->patient_id;
+            
+    //         // جلب معلومات المريض
+    //         $receiver = Patient::find($receiverId);
+    //     } else {
+    //         $senderType = 'patient';
+    //         $senderId = $user->patient->id;
+            
+    //         // الحصول على معرف الدكتور من الموعد
+    //         $appointment = \App\Models\Appointment::find($data['appointment_id']);
+    //         $receiverType = 'doctor';
+    //         $receiverId = $appointment->doctor_id;
+            
+    //         // جلب معلومات الدكتور
+    //         $receiver = Doctor::find($receiverId);
+    //     }
+        
+    //     // إنشاء رسالة الدردشة
+    //     $chat = ChatMessage::create([
+    //         'appointment_id' => $data['appointment_id'],
+    //         'sender_type' => $senderType,
+    //         'sender_id' => $senderId,
+    //         'message' => $data['message'],
+    //         'is_read' => false,
+    //     ]);
+        
+    //     // تحليل المشاعر إذا كان المرسل هو الدكتور
+    //     $rating = null;
+    //     if ($senderType === 'doctor') {
+    //         $bertResult = $this->bert->analyze($data['message']);
+            
+    //         $rating = ChatRating::create([
+    //             'appointment_id' => $data['appointment_id'],
+    //             'patient_id' => $receiverId,
+    //             'sentiment_score' => $bertResult['score'],
+    //             'sentiment_label' => $bertResult['label'],
+    //         ]);
+    //     }
+        
+    //     // إرسال إشعار بواسطة FCM
+    //     if ($receiver && $receiver->fcm_token) {
+    //         // استخراج اسم المرسل
+    //         if ($senderType === 'doctor') {
+    //             $senderName = $user->doctor->name;
+    //         } else {
+    //             $senderName = $user->patient->name;
+    //         }
+            
+    //         $this->fcm->sendToUser(
+    //             $receiver->fcm_token,
+    //             'رسالة جديدة',
+    //             $senderName . ': ' . substr($chat->message, 0, 50),
+    //             [
+    //                 'chat_id' => $chat->id,
+    //                 'appointment_id' => $data['appointment_id'],
+    //                 'sender_type' => $senderType,
+    //                 'sender_id' => $senderId
+    //             ]
+    //         );
+    //     }
+        
+    //     // تحضير الرد
+    //     $response = $chat->toArray();
+    //     if ($rating) {
+    //         $response['sentiment_score'] = $rating->sentiment_score;
+    //         $response['sentiment_label'] = $rating->sentiment_label;
+    //     }
+        
+    //     return response()->json($response, 201);
+    // }
     
     /**
      * الحصول على الرسائل لموعد محدد
