@@ -346,12 +346,8 @@ class DoctorController extends Controller
                 'clinic_address' => $doctor->clinic_address,
                 'average_rating' => $avgRating ? round($avgRating, 2) : null,
                 'ratings_count' => $ratingsCount,
-                'email_verified' => (bool) $doctor->email_verified,
-                'is_verified_by_ocr' => (bool) $doctor->is_verified_by_ocr,
-                'medical_license' => $doctor->medical_license_path,
                 'license_number' => $doctor->license_number,
                 'schedules' => $schedules,
-                'joined_at' => $doctor->created_at ? $doctor->created_at->format('Y-m-d') : null
             ];
 
             Log::info('Successfully fetched doctor details', [
