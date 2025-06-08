@@ -285,23 +285,121 @@ class DoctorController extends Controller
     }
 
     // جلب تفاصيل دكتور واحد
-    public function show($id): JsonResponse
-    {
-        $doctor = Doctor::findOrFail($id);
+   <?php
+
+// في DoctorController.php - استبدل الـ show method بهذا الكود المُحسن:
+
+public function show($id): JsonResponse
+{
+    try {
+        // إضافة تسجيل للتشخيص
+        Log::info('Fetching doctor details', ['doctor_id' => $id]);
+        
+        // التحقق من وجود الدكتور أولاً
+        $doctor = Doctor::find($id);
+        
+        if (!$doctor) {
+            Log::warning('Doctor not found', ['doctor_id' => $id]);
+            return response()->json([
+                'message' => 'Doctor not found'
+            ], 404);
+        }
+        
+        // التحقق من حالة التحقق للدكتور
+        if (!$doctor->email_verified || !$doctor->is_verified_by_ocr) {
+            Log::info('Doctor not fully verified', [
+                'doctor_id' => $id,
+                'email_verified' => $doctor->email_verified,
+                'ocr_verified' => $doctor->is_verified_by_ocr
+            ]);
+        }
+        
+        // جلب الجداول الزمنية
         $schedules = DoctorSchedule::where('doctor_id', $doctor->id)->get();
-        $avg = ChatRating::where('doctor_id', $doctor->id)->avg('sentiment_score');
-        return response()->json([
+        Log::info('Doctor schedules found', ['count' => $schedules->count()]);
+        
+        // حساب متوسط التقييم
+        $avgRating = ChatRating::where('doctor_id', $doctor->id)->avg('sentiment_score');
+        $ratingsCount = ChatRating::where('doctor_id', $doctor->id)->count();
+        
+        Log::info('Doctor ratings', [
+            'average' => $avgRating,
+            'count' => $ratingsCount
+        ]);
+        
+        // تجهيز البيانات للإرجاع
+        $doctorData = [
             'id' => $doctor->id,
             'name' => $doctor->name,
+            'email' => $doctor->email, // إضافة الإيميل للتشخيص
             'profile_image' => $doctor->profile_image,
             'specialization' => $doctor->specialization,
             'session_price' => $doctor->session_price,
             'bio' => $doctor->bio,
-            'clinic_address' => $doctor->clinic_address, // إضافة عنوان العيادة للاستجابة
+            'clinic_address' => $doctor->clinic_address,
             'schedules' => $schedules,
-            'average_rating' => $avg,
+            'average_rating' => $avgRating ? round($avgRating, 2) : null,
+            'ratings_count' => $ratingsCount,
+            'email_verified' => $doctor->email_verified,
+            'is_verified_by_ocr' => $doctor->is_verified_by_ocr,
+            'created_at' => $doctor->created_at,
+            'updated_at' => $doctor->updated_at
+        ];
+        
+        Log::info('Doctor data prepared successfully', ['doctor_id' => $id]);
+        
+        return response()->json($doctorData);
+        
+    } catch (\Exception $e) {
+        Log::error('Error fetching doctor details', [
+            'doctor_id' => $id,
+            'error' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine()
         ]);
+        
+        return response()->json([
+            'message' => 'Error fetching doctor details',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
+
+// إضافة هذا الـ route في ملف routes/api.php داخل الـ middleware المحمي:
+// Route::get('/doctors/{id}/debug', [DoctorController::class, 'debug']);
+
+// إضافة method للتشخيص (اختياري)
+public function debug($id): JsonResponse
+{
+    try {
+        // فحص وجود الدكتور في قاعدة البيانات
+        $doctorExists = Doctor::where('id', $id)->exists();
+        $doctorCount = Doctor::count();
+        $allDoctorIds = Doctor::pluck('id')->toArray();
+        
+        // فحص الجداول الزمنية
+        $schedulesCount = DoctorSchedule::where('doctor_id', $id)->count();
+        
+        // فحص التقييمات
+        $ratingsCount = ChatRating::where('doctor_id', $id)->count();
+        
+        return response()->json([
+            'doctor_exists' => $doctorExists,
+            'total_doctors_count' => $doctorCount,
+            'all_doctor_ids' => $allDoctorIds,
+            'schedules_count' => $schedulesCount,
+            'ratings_count' => $ratingsCount,
+            'requested_id' => $id,
+            'id_type' => gettype($id)
+        ]);
+        
+    } catch (\Exception $e) {
+        return response()->json([
+            'error' => $e->getMessage(),
+            'requested_id' => $id
+        ], 500);
+    }
+}
 
     /**
      * اختبار تكوين Cloudinary
