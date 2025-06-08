@@ -155,6 +155,9 @@ if (app()->environment(['local', 'staging'])) {
         // Test Cloudinary configuration
         Route::get('cloudinary-config', [DoctorController::class, 'testCloudinaryConfig']);
         
+        // Debug doctor data
+        Route::get('doctor-debug/{id?}', [DoctorController::class, 'debug']);
+        
         // Test database connection
         Route::get('db-test', function () {
             try {
