@@ -32,29 +32,31 @@ class ChatController extends Controller
 
 
 
-   public function sendMessage(Request $request): JsonResponse
+  public function sendMessage(Request $request): JsonResponse
 {
-    \Log::info('sendMessage called');
+    $debugLogs = [];
+
+    $debugLogs[] = 'sendMessage called';
 
     $user = Auth::user();
     if (!$user) {
-        \Log::warning('No authenticated user found.');
-        return response()->json(['error' => 'Unauthenticated user'], 401);
+        $debugLogs[] = 'No authenticated user found.';
+        return response()->json(['error' => 'Unauthenticated user', 'logs' => $debugLogs], 401);
     }
-    \Log::info('Authenticated user:', ['id' => $user->id, 'role' => $user->role]);
+    $debugLogs[] = 'Authenticated user: id=' . $user->id . ', role=' . $user->role;
 
     $data = $request->validate([
         'appointment_id' => 'required|exists:appointments,id',
         'message' => 'required|string',
     ]);
-    \Log::info('Validated data:', $data);
+    $debugLogs[] = 'Validated data: ' . json_encode($data);
 
     if ($user->role === 'doctor') {
         $senderType = 'doctor';
         $senderId = $user->doctor->id ?? null;
         if (!$senderId) {
-            \Log::error('Doctor ID not found for user.');
-            return response()->json(['error' => 'Doctor profile not found'], 400);
+            $debugLogs[] = 'Doctor ID not found for user.';
+            return response()->json(['error' => 'Doctor profile not found', 'logs' => $debugLogs], 400);
         }
         $appointment = \App\Models\Appointment::find($data['appointment_id']);
         $receiverType = 'patient';
@@ -64,20 +66,15 @@ class ChatController extends Controller
         $senderType = 'patient';
         $senderId = $user->patient->id ?? null;
         if (!$senderId) {
-            \Log::error('Patient ID not found for user.');
-            return response()->json(['error' => 'Patient profile not found'], 400);
+            $debugLogs[] = 'Patient ID not found for user.';
+            return response()->json(['error' => 'Patient profile not found', 'logs' => $debugLogs], 400);
         }
         $appointment = \App\Models\Appointment::find($data['appointment_id']);
         $receiverType = 'doctor';
         $receiverId = $appointment->doctor_id;
         $receiver = Doctor::find($receiverId);
     }
-    \Log::info('Sender and receiver info', [
-        'sender_type' => $senderType,
-        'sender_id' => $senderId,
-        'receiver_type' => $receiverType,
-        'receiver_id' => $receiverId,
-    ]);
+    $debugLogs[] = "Sender: $senderType ($senderId), Receiver: $receiverType ($receiverId)";
 
     try {
         $chat = ChatMessage::create([
@@ -87,17 +84,17 @@ class ChatController extends Controller
             'message' => $data['message'],
             'is_read' => false,
         ]);
-        \Log::info('Chat message created', $chat->toArray());
+        $debugLogs[] = 'Chat message created with ID: ' . $chat->id;
     } catch (\Exception $e) {
-        \Log::error('Failed to create chat message: ' . $e->getMessage());
-        return response()->json(['error' => 'Failed to save message'], 500);
+        $debugLogs[] = 'Failed to create chat message: ' . $e->getMessage();
+        return response()->json(['error' => 'Failed to save message', 'logs' => $debugLogs], 500);
     }
 
     $rating = null;
     if ($senderType === 'doctor') {
         try {
             $bertResult = $this->bert->analyze($data['message']);
-            \Log::info('BERT analysis result', $bertResult);
+            $debugLogs[] = 'BERT analysis result: ' . json_encode($bertResult);
 
             $rating = ChatRating::create([
                 'appointment_id' => $data['appointment_id'],
@@ -105,9 +102,9 @@ class ChatController extends Controller
                 'sentiment_score' => $bertResult['score'],
                 'sentiment_label' => $bertResult['label'],
             ]);
-            \Log::info('Chat rating saved', $rating->toArray());
+            $debugLogs[] = 'Chat rating saved with ID: ' . $rating->id;
         } catch (\Exception $e) {
-            \Log::error('BERT analysis or rating save failed: ' . $e->getMessage());
+            $debugLogs[] = 'BERT analysis or rating save failed: ' . $e->getMessage();
         }
     }
 
@@ -126,10 +123,10 @@ class ChatController extends Controller
         $responseFirebase = $client->post($firebasePath, [
             'json' => $firebaseMessage
         ]);
-        \Log::info('Firebase response status: ' . $responseFirebase->getStatusCode());
-        \Log::info('Firebase response body: ' . $responseFirebase->getBody()->getContents());
+        $debugLogs[] = 'Firebase response status: ' . $responseFirebase->getStatusCode();
+        $debugLogs[] = 'Firebase response body: ' . $responseFirebase->getBody()->getContents();
     } catch (\Exception $e) {
-        \Log::error('Firebase Error: ' . $e->getMessage());
+        $debugLogs[] = 'Firebase Error: ' . $e->getMessage();
     }
 
     if ($receiver && $receiver->fcm_token) {
@@ -147,12 +144,12 @@ class ChatController extends Controller
                     'sender_id' => $senderId
                 ]
             );
-            \Log::info('FCM notification sent to token: ' . $receiver->fcm_token);
+            $debugLogs[] = 'FCM notification sent to token: ' . $receiver->fcm_token;
         } catch (\Exception $e) {
-            \Log::error('FCM send error: ' . $e->getMessage());
+            $debugLogs[] = 'FCM send error: ' . $e->getMessage();
         }
     } else {
-        \Log::info('No FCM token found for receiver or receiver not found.');
+        $debugLogs[] = 'No FCM token found for receiver or receiver not found.';
     }
 
     $response = $chat->toArray();
@@ -161,10 +158,14 @@ class ChatController extends Controller
         $response['sentiment_label'] = $rating->sentiment_label;
     }
 
-    \Log::info('sendMessage response', $response);
+    $debugLogs[] = 'sendMessage response prepared';
 
-    return response()->json($response, 201);
+    return response()->json([
+        'data' => $response,
+        'logs' => $debugLogs
+    ], 201);
 }
+
 
 
     
