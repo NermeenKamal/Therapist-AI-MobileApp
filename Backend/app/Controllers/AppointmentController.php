@@ -35,6 +35,11 @@ class AppointmentController extends Controller
     // الدكتور ينشئ موعد متاح
     public function createAvailableAppointment(Request $request): JsonResponse
     {
+         \Log::info('Authenticated user:', [
+        'class' => get_class(Auth::user()),
+        'attributes' => Auth::user()?->toArray(),
+    ]);
+
         $this->authorize('create', Appointment::class);
 
         $data = $request->validate([
