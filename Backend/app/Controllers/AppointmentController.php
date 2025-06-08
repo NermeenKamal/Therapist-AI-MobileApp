@@ -25,12 +25,13 @@ class AppointmentController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
+    
         $appointments = Appointment::where(function($q) use ($user) {
             $q->where('patient_id', $user->id)
               ->orWhere('doctor_id', $user->id);
         })->with(['doctor', 'patient'])->get();
-
-        return response()->json($appointments);
+    
+        return response()->json(AppointmentIndexResource::collection($appointments));
     }
 
     // الدكتور ينشئ موعد متاح
