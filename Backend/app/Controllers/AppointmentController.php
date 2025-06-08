@@ -144,41 +144,44 @@ public function confirm(Request $request, int $id): JsonResponse
 
     // تعديل موعد (تاريخ/ملاحظات)
     public function update(Request $request, int $id): JsonResponse
-    {
-        $appointment = Appointment::findOrFail($id);
-        $this->authorize('update', $appointment);
+{
+    $appointment = Appointment::findOrFail($id);
+    $this->authorize('update', $appointment);
 
-        $data = $request->validate([
-            'appointment_date' => 'sometimes|date',
-            'notes'            => 'nullable|string',
-            'price'            => 'nullable|numeric',
-        ]);
+    $data = $request->validate([
+        'appointment_date' => 'sometimes|date',
+        'notes'            => 'nullable|string',
+        'price'            => 'nullable|numeric',
+    ]);
 
-        $appointment->update($data);
+    $appointment->update($data);
 
-        // إشعار للطرف الآخر - مع حماية من أخطاء Firebase
-        try {
-            $other = $appointment->patient_id === Auth::id()
-                ? $appointment->doctor
-                : $appointment->patient;
+    // إشعار الطرف الآخر مع حماية الأخطاء
+    try {
+        $other = $appointment->patient_id === auth()->id()
+            ? $appointment->doctor
+            : $appointment->patient;
 
-            if ($other && $other->fcm_token) {
-                $this->fcm->sendToUser(
-                    $other->fcm_token,
-                    'Appointment edited',
-                    'Appointment edited number: ' . $appointment->id,
-                    ['appointment_id' => $appointment->id]
-                );
-            }
-        } catch (\Exception $e) {
-            Log::warning('FCM notification failed in update: ' . $e->getMessage(), [
-                'appointment_id' => $appointment->id,
-                'user_id' => Auth::id()
-            ]);
+        if ($other && $other->fcm_token) {
+            $this->fcm->sendToUser(
+                $other->fcm_token,
+                'Appointment edited',
+                'Appointment edited number: ' . $appointment->id,
+                ['appointment_id' => $appointment->id]
+            );
         }
-
-        return response()->json($appointment);
+    } catch (\Exception $e) {
+        Log::warning('FCM notification failed in update: ' . $e->getMessage(), [
+            'appointment_id' => $appointment->id,
+            'user_id' => auth()->id(),
+        ]);
     }
+
+    return response()->json([
+        'message' => 'Appointment updated successfully',
+        'appointment' => new AppointmentResource($appointment->load(['doctor', 'patient']))
+    ]);
+}
 
     // إلغاء موعد
     public function cancel(Request $request, int $id): JsonResponse
