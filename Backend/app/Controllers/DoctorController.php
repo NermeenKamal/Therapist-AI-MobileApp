@@ -271,6 +271,12 @@ class DoctorController extends Controller
      */
     public function show($id): JsonResponse
     {
+        Log::info('Doctor show method called', [
+        'route' => request()->path(),
+        'authenticated' => Auth::check(),
+        'user_id' => Auth::check() ? Auth::id() : null,
+        'requested_id' => $id
+    ]);
         try {
             Log::info('Fetching doctor details', ['doctor_id' => $id, 'id_type' => gettype($id)]);
             
