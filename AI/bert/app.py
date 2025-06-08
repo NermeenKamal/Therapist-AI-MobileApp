@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 # تحميل المتغيرات البيئية
 load_dotenv()
 
-print("==== Chatbot API IS STARTING ====")
+print("==== BERT API IS STARTING ====")
 
 app = FastAPI(title="BERT Model API")
 
