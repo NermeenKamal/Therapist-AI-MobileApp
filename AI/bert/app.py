@@ -37,6 +37,8 @@ async def root():
 async def analyze_text(input_data: TextInput):
     try:
         # تحضير النص
+        print("==== /analyze CALLED ====")
+        print(f"Received text: {input_data.text}")
         inputs = tokenizer(input_data.text, return_tensors="pt", truncation=True, padding=True)
         
         # التنبؤ
