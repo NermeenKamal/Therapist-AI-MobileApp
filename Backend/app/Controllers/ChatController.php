@@ -66,6 +66,7 @@ class ChatController extends Controller
         'message' => $data['message'],
         'is_read' => false,
     ]);
+    \Log::info('Chat message created', $chat->toArray());
 
     // تحليل المشاعر (لو المرسل دكتور)
     $rating = null;
