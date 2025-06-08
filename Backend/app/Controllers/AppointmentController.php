@@ -2,6 +2,7 @@
 
 namespace App\Controllers;
 
+use App\Resources\AppointmentIndexResource;
 use App\Models\Appointment;
 use App\Models\User;
 use App\Models\Doctor;
