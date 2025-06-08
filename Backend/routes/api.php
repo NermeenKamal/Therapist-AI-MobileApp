@@ -95,7 +95,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Doctor Routes
     Route::post('/doctor/update-profile', [DoctorController::class, 'updateProfile']);
     Route::get('/doctors', [DoctorController::class, 'index']);
-    Route::get('/doctors/id/{id}', [DoctorController::class, 'show']);
+    Route::get('/doctors/{id}', [DoctorController::class, 'show'])->where('id', '[0-9]+');
 
     // Article Routes
     Route::get('/articles', [ArticleController::class, 'index']);
