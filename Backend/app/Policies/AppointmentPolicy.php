@@ -6,10 +6,16 @@ use App\Models\Appointment;
 class AppointmentPolicy
 {
     // دكتور فقط يقدر ينشئ مواعيد متاحة
-    public function create(Authenticatable $user): bool
-    {
-        return $user->user_type === 'doctor'; // غيّر من role إلى user_type
-    }
+    public function create($user): bool
+{
+    \Log::info('Policy create called with:', [
+        'class' => get_class($user),
+        'attributes' => $user?->toArray(),
+    ]);
+
+    return $user instanceof \App\Models\Doctor;
+}
+
     
     // المريض أو الدكتور يقدر يلغي
     public function cancel(Authenticatable $user, Appointment $appointment): bool
