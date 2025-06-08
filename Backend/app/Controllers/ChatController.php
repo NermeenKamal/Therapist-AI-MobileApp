@@ -449,3 +449,4 @@ public function getRecentChats(): JsonResponse
     
     return response()->json($recentChats);
 }
+}
