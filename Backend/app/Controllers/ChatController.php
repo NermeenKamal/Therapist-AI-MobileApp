@@ -34,6 +34,8 @@ class ChatController extends Controller
 
   public function sendMessage(Request $request): JsonResponse
 {
+    logger('sendMessage entered');
+
     $debugLogs = [];
 
     $debugLogs[] = 'sendMessage called';
