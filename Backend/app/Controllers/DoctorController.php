@@ -357,77 +357,89 @@ class DoctorController extends Controller
     }
 
     // جلب تفاصيل دكتور واحد - مُحدث
-    public function show($id): JsonResponse
+     public function show($id): JsonResponse
     {
         try {
-            // إضافة تسجيل للتشخيص
             Log::info('Fetching doctor details', ['doctor_id' => $id]);
             
-            // التحقق من وجود الدكتور أولاً
-            $doctor = Doctor::find($id);
-            
+            // جلب البيانات مع تحديد الحقول المطلوبة فقط
+            $doctor = Doctor::select([
+                'id',
+                'name',
+                'email',
+                'mobile_number',
+                'specialization',
+                'bio',
+                'clinic_address',
+                'session_price',
+                'profile_image',
+                'medical_license_path',
+                'license_number',
+                'email_verified',
+                'is_verified_by_ocr',
+                'created_at'
+            ])->find($id);
+
             if (!$doctor) {
                 Log::warning('Doctor not found', ['doctor_id' => $id]);
                 return response()->json([
-                    'message' => 'Doctor not found'
+                    'message' => 'Doctor not found',
+                    'success' => false
                 ], 404);
             }
-            
-            // التحقق من حالة التحقق للدكتور
-            if (!$doctor->email_verified || !$doctor->is_verified_by_ocr) {
-                Log::info('Doctor not fully verified', [
-                    'doctor_id' => $id,
-                    'email_verified' => $doctor->email_verified,
-                    'ocr_verified' => $doctor->is_verified_by_ocr
-                ]);
-            }
-            
+
             // جلب الجداول الزمنية
-            $schedules = DoctorSchedule::where('doctor_id', $doctor->id)->get();
-            Log::info('Doctor schedules found', ['count' => $schedules->count()]);
-            
+            $schedules = DoctorSchedule::where('doctor_id', $doctor->id)
+                ->select(['id', 'day', 'start_time', 'end_time'])
+                ->get();
+
             // حساب متوسط التقييم
-            $avgRating = ChatRating::where('doctor_id', $doctor->id)->avg('sentiment_score');
-            $ratingsCount = ChatRating::where('doctor_id', $doctor->id)->count();
-            
-            Log::info('Doctor ratings', [
-                'average' => $avgRating,
-                'count' => $ratingsCount
-            ]);
-            
-            // تجهيز البيانات للإرجاع
-            $doctorData = [
+            $avgRating = ChatRating::where('doctor_id', $doctor->id)
+                ->avg('sentiment_score');
+            $ratingsCount = ChatRating::where('doctor_id', $doctor->id)
+                ->count();
+
+            // بناء هيكل البيانات للإرجاع
+            $responseData = [
                 'id' => $doctor->id,
                 'name' => $doctor->name,
-                'profile_image' => $doctor->profile_image,
+                'email' => $doctor->email,
+                'mobile_number' => $doctor->mobile_number,
                 'specialization' => $doctor->specialization,
-                'session_price' => $doctor->session_price,
                 'bio' => $doctor->bio,
                 'clinic_address' => $doctor->clinic_address,
+                'session_price' => $doctor->session_price,
+                'profile_image' => $doctor->profile_image,
+                'medical_license' => $doctor->medical_license_path,
+                'license_number' => $doctor->license_number,
                 'schedules' => $schedules,
                 'average_rating' => $avgRating ? round($avgRating, 2) : null,
                 'ratings_count' => $ratingsCount,
-                'email_verified' => $doctor->email_verified,
-                'is_verified_by_ocr' => $doctor->is_verified_by_ocr,
-                'created_at' => $doctor->created_at,
-                'updated_at' => $doctor->updated_at
+                'verification' => [
+                    'email_verified' => (bool)$doctor->email_verified,
+                    'ocr_verified' => (bool)$doctor->is_verified_by_ocr
+                ],
+                'joined_at' => $doctor->created_at->format('Y-m-d')
             ];
+
+            Log::info('Successfully fetched doctor details', ['doctor_id' => $id]);
             
-            Log::info('Doctor data prepared successfully', ['doctor_id' => $id]);
-            
-            return response()->json($doctorData);
-            
+            return response()->json([
+                'data' => $responseData,
+                'success' => true
+            ]);
+
         } catch (\Exception $e) {
-            Log::error('Error fetching doctor details', [
+            Log::error('Failed to fetch doctor details', [
                 'doctor_id' => $id,
                 'error' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine()
+                'trace' => $e->getTraceAsString()
             ]);
             
             return response()->json([
-                'message' => 'Error fetching doctor details',
-                'error' => $e->getMessage()
+                'message' => 'Internal server error',
+                'success' => false,
+                'error' => env('APP_DEBUG') ? $e->getMessage() : null
             ], 500);
         }
     }
