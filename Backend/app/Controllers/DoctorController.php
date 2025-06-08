@@ -272,7 +272,26 @@ class DoctorController extends Controller
     public function show($id): JsonResponse
     {
         try {
-            Log::info('Fetching doctor details', ['doctor_id' => $id]);
+            Log::info('Fetching doctor details', ['doctor_id' => $id, 'id_type' => gettype($id)]);
+            
+            // التأكد من أن الـ ID رقم صحيح
+            if (!is_numeric($id) || $id <= 0) {
+                Log::warning('Invalid doctor ID provided', ['doctor_id' => $id]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid doctor ID'
+                ], 400);
+            }
+
+            // فحص وجود الدكتور أولاً
+            $doctorExists = Doctor::where('id', $id)->exists();
+            if (!$doctorExists) {
+                Log::warning('Doctor not found', ['doctor_id' => $id]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Doctor not found'
+                ], 404);
+            }
             
             $doctor = Doctor::select([
                 'id', 'name', 'email', 'mobile_number', 'specialization',
@@ -281,44 +300,58 @@ class DoctorController extends Controller
                 'is_verified_by_ocr', 'created_at'
             ])->find($id);
 
-            if (!$doctor) {
-                Log::warning('Doctor not found', ['doctor_id' => $id]);
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Doctor not found'
-                ], 404);
+            // Get schedules with error handling
+            $schedules = [];
+            try {
+                $schedules = DoctorSchedule::where('doctor_id', $doctor->id)
+                    ->select(['id', 'day', 'start_time', 'end_time'])
+                    ->get()
+                    ->toArray();
+            } catch (Exception $scheduleError) {
+                Log::warning('Failed to fetch doctor schedules', [
+                    'doctor_id' => $id,
+                    'error' => $scheduleError->getMessage()
+                ]);
+                $schedules = [];
             }
 
-            // Get schedules
-            $schedules = DoctorSchedule::where('doctor_id', $doctor->id)
-                ->select(['id', 'day', 'start_time', 'end_time'])
-                ->get();
-
-            // Calculate ratings
-            $avgRating = ChatRating::where('doctor_id', $doctor->id)->avg('sentiment_score');
-            $ratingsCount = ChatRating::where('doctor_id', $doctor->id)->count();
+            // Calculate ratings with error handling
+            $avgRating = null;
+            $ratingsCount = 0;
+            try {
+                $avgRating = ChatRating::where('doctor_id', $doctor->id)->avg('sentiment_score');
+                $ratingsCount = ChatRating::where('doctor_id', $doctor->id)->count();
+            } catch (Exception $ratingError) {
+                Log::warning('Failed to fetch doctor ratings', [
+                    'doctor_id' => $id,
+                    'error' => $ratingError->getMessage()
+                ]);
+            }
 
             $responseData = [
                 'id' => $doctor->id,
-                'name' => $doctor->name,
-                'email' => $doctor->email,
-                'mobile_number' => $doctor->mobile_number,
+                'name' => $doctor->name ?? '',
+                'email' => $doctor->email ?? '',
+                'mobile_number' => $doctor->mobile_number ?? '',
                 'profile_image' => $doctor->profile_image,
-                'specialization' => $doctor->specialization,
+                'specialization' => $doctor->specialization ?? '',
                 'session_price' => $doctor->session_price,
                 'bio' => $doctor->bio,
                 'clinic_address' => $doctor->clinic_address,
                 'average_rating' => $avgRating ? round($avgRating, 2) : null,
                 'ratings_count' => $ratingsCount,
-                'email_verified' => $doctor->email_verified,
-                'is_verified_by_ocr' => $doctor->is_verified_by_ocr,
+                'email_verified' => (bool) $doctor->email_verified,
+                'is_verified_by_ocr' => (bool) $doctor->is_verified_by_ocr,
                 'medical_license' => $doctor->medical_license_path,
                 'license_number' => $doctor->license_number,
                 'schedules' => $schedules,
-                'joined_at' => $doctor->created_at->format('Y-m-d')
+                'joined_at' => $doctor->created_at ? $doctor->created_at->format('Y-m-d') : null
             ];
 
-            Log::info('Successfully fetched doctor details', ['doctor_id' => $id]);
+            Log::info('Successfully fetched doctor details', [
+                'doctor_id' => $id,
+                'doctor_name' => $doctor->name
+            ]);
             
             return response()->json([
                 'success' => true,
@@ -328,12 +361,84 @@ class DoctorController extends Controller
         } catch (Exception $e) {
             Log::error('Failed to fetch doctor details', [
                 'doctor_id' => $id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
             ]);
             
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to fetch doctor details'
+                'message' => 'Failed to fetch doctor details',
+                'debug' => [
+                    'doctor_id' => $id,
+                    'error' => $e->getMessage(),
+                    'line' => $e->getLine()
+                ]
+            ], 500);
+        }
+    }
+
+    /**
+     * Debug method to check doctor data
+     */
+    public function debug($id = null): JsonResponse
+    {
+        try {
+            // معلومات عامة
+            $totalDoctors = Doctor::count();
+            $sampleDoctorIds = Doctor::pluck('id')->take(10)->toArray();
+            
+            // معلومات خاصة بالدكتور المطلوب
+            $doctorInfo = null;
+            if ($id) {
+                $doctorExists = Doctor::where('id', $id)->exists();
+                $doctorInfo = [
+                    'requested_id' => $id,
+                    'id_type' => gettype($id),
+                    'exists' => $doctorExists
+                ];
+                
+                if ($doctorExists) {
+                    $doctor = Doctor::find($id);
+                    $doctorInfo['doctor_data'] = [
+                        'id' => $doctor->id,
+                        'name' => $doctor->name,
+                        'email' => $doctor->email,
+                        'specialization' => $doctor->specialization,
+                        'email_verified' => $doctor->email_verified,
+                        'is_verified_by_ocr' => $doctor->is_verified_by_ocr,
+                        'created_at' => $doctor->created_at
+                    ];
+                    
+                    // فحص الجداول المرتبطة
+                    $doctorInfo['related_data'] = [
+                        'schedules_count' => DoctorSchedule::where('doctor_id', $id)->count(),
+                        'ratings_count' => ChatRating::where('doctor_id', $id)->count()
+                    ];
+                }
+            }
+            
+            return response()->json([
+                'success' => true,
+                'debug_info' => [
+                    'total_doctors' => $totalDoctors,
+                    'sample_doctor_ids' => $sampleDoctorIds,
+                    'doctor_specific' => $doctorInfo,
+                    'database_tables' => [
+                        'doctors_table_exists' => \Schema::hasTable('doctors'),
+                        'doctor_schedules_table_exists' => \Schema::hasTable('doctor_schedules'),
+                        'chat_ratings_table_exists' => \Schema::hasTable('chat_ratings')
+                    ]
+                ]
+            ]);
+            
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
             ], 500);
         }
     }
