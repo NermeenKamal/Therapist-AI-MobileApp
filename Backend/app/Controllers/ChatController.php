@@ -37,7 +37,6 @@ class ChatController extends Controller
     logger('sendMessage entered');
 
     $debugLogs = [];
-
     $debugLogs[] = 'sendMessage called';
 
     $user = Auth::user();
@@ -45,7 +44,21 @@ class ChatController extends Controller
         $debugLogs[] = 'No authenticated user found.';
         return response()->json(['error' => 'Unauthenticated user', 'logs' => $debugLogs], 401);
     }
-    $debugLogs[] = 'Authenticated user: id=' . $user->id . ', role=' . $user->role;
+
+    // تحديد نوع المستخدم بناءً على نوع الـ model
+    $userType = null;
+    $senderId = $user->id;
+    
+    if ($user instanceof \App\Models\Patient) {
+        $userType = 'patient';
+        $debugLogs[] = 'Authenticated as patient: id=' . $user->id;
+    } elseif ($user instanceof \App\Models\Doctor) {
+        $userType = 'doctor';
+        $debugLogs[] = 'Authenticated as doctor: id=' . $user->id;
+    } else {
+        $debugLogs[] = 'Unable to determine user type. User class: ' . get_class($user);
+        return response()->json(['error' => 'Unable to determine user type', 'logs' => $debugLogs], 400);
+    }
 
     $data = $request->validate([
         'appointment_id' => 'required|exists:appointments,id',
@@ -53,29 +66,38 @@ class ChatController extends Controller
     ]);
     $debugLogs[] = 'Validated data: ' . json_encode($data);
 
-    if ($user->role === 'doctor') {
-        $senderType = 'doctor';
-        $senderId = $user->doctor->id ?? null;
-        if (!$senderId) {
-            $debugLogs[] = 'Doctor ID not found for user.';
-            return response()->json(['error' => 'Doctor profile not found', 'logs' => $debugLogs], 400);
+    // الحصول على الموعد والتحقق من وجوده
+    $appointment = \App\Models\Appointment::find($data['appointment_id']);
+    if (!$appointment) {
+        $debugLogs[] = 'Appointment not found.';
+        return response()->json(['error' => 'Appointment not found', 'logs' => $debugLogs], 404);
+    }
+
+    // تحديد المرسل والمستقبل
+    if ($userType === 'doctor') {
+        // التحقق من أن الدكتور مخول لهذا الموعد
+        if ($appointment->doctor_id !== $senderId) {
+            $debugLogs[] = 'Doctor not authorized for this appointment.';
+            return response()->json(['error' => 'Not authorized for this appointment', 'logs' => $debugLogs], 403);
         }
-        $appointment = \App\Models\Appointment::find($data['appointment_id']);
+        
+        $senderType = 'doctor';
         $receiverType = 'patient';
         $receiverId = $appointment->patient_id;
         $receiver = Patient::find($receiverId);
-    } else {
-        $senderType = 'patient';
-        $senderId = $user->patient->id ?? null;
-        if (!$senderId) {
-            $debugLogs[] = 'Patient ID not found for user.';
-            return response()->json(['error' => 'Patient profile not found', 'logs' => $debugLogs], 400);
+    } else { // patient
+        // التحقق من أن المريض مخول لهذا الموعد
+        if ($appointment->patient_id !== $senderId) {
+            $debugLogs[] = 'Patient not authorized for this appointment.';
+            return response()->json(['error' => 'Not authorized for this appointment', 'logs' => $debugLogs], 403);
         }
-        $appointment = \App\Models\Appointment::find($data['appointment_id']);
+        
+        $senderType = 'patient';
         $receiverType = 'doctor';
         $receiverId = $appointment->doctor_id;
         $receiver = Doctor::find($receiverId);
     }
+
     $debugLogs[] = "Sender: $senderType ($senderId), Receiver: $receiverType ($receiverId)";
 
     try {
@@ -92,6 +114,7 @@ class ChatController extends Controller
         return response()->json(['error' => 'Failed to save message', 'logs' => $debugLogs], 500);
     }
 
+    // تحليل المشاعر إذا كان المرسل هو الدكتور
     $rating = null;
     if ($senderType === 'doctor') {
         try {
@@ -110,6 +133,7 @@ class ChatController extends Controller
         }
     }
 
+    // إرسال إلى Firebase
     try {
         $firebaseBase = 'https://therapist-app-4c42e-default-rtdb.firebaseio.com/';
         $firebasePath = $firebaseBase . 'messages/' . $data['appointment_id'] . '.json';
@@ -126,14 +150,14 @@ class ChatController extends Controller
             'json' => $firebaseMessage
         ]);
         $debugLogs[] = 'Firebase response status: ' . $responseFirebase->getStatusCode();
-        $debugLogs[] = 'Firebase response body: ' . $responseFirebase->getBody()->getContents();
     } catch (\Exception $e) {
         $debugLogs[] = 'Firebase Error: ' . $e->getMessage();
     }
 
+    // إرسال إشعار FCM
     if ($receiver && $receiver->fcm_token) {
         try {
-            $senderName = ($senderType === 'doctor') ? $user->doctor->name : $user->patient->name;
+            $senderName = $user->name; // الاسم موجود مباشرة في المودل
 
             $this->fcm->sendToUser(
                 $receiver->fcm_token,
@@ -266,134 +290,162 @@ class ChatController extends Controller
      * @param int $appointmentId
      * @return JsonResponse
      */
-    public function getMessages(int $appointmentId): JsonResponse
-    {
-        // التحقق من وصول المستخدم للموعد
-        $user = Auth::user();
-        $userType = $user->role;
-        
-        $appointment = \App\Models\Appointment::find($appointmentId);
-        
-        if (!$appointment) {
-            return response()->json(['message' => 'الموعد غير موجود'], 404);
-        }
-        
-        // التحقق من أن المستخدم الحالي هو جزء من هذا الموعد
-        $hasAccess = false;
-        
-        if ($userType === 'doctor' && $appointment->doctor_id === $user->doctor->id) {
-            $hasAccess = true;
-        } else if ($userType === 'patient' && $appointment->patient_id === $user->patient->id) {
-            $hasAccess = true;
-        }
-        
-        if (!$hasAccess) {
-            return response()->json(['message' => 'غير مصرح بالوصول لهذا الموعد'], 403);
-        }
-        
-        // جلب الرسائل
-        $messages = ChatMessage::where('appointment_id', $appointmentId)
-            ->orderBy('created_at')
-            ->get();
-        
-        return response()->json($messages);
+   /**
+ * الحصول على الرسائل لموعد محدد
+ */
+public function getMessages(int $appointmentId): JsonResponse
+{
+    $user = Auth::user();
+    
+    // تحديد نوع المستخدم
+    $userType = null;
+    $userId = null;
+    
+    if ($user instanceof \App\Models\Patient) {
+        $userType = 'patient';
+        $userId = $user->id;
+    } elseif ($user instanceof \App\Models\Doctor) {
+        $userType = 'doctor';
+        $userId = $user->id;
+    } else {
+        return response()->json(['message' => 'نوع المستخدم غير محدد'], 400);
     }
     
-    /**
-     * تحديد الرسائل كمقروءة
-     * 
-     * @param Request $request
-     * @return JsonResponse
-     */
-    public function markAsRead(Request $request): JsonResponse
-    {
-        $data = $request->validate([
-            'appointment_id' => 'required|exists:appointments,id',
-        ]);
-        
-        $user = Auth::user();
-        $userType = $user->role;
-        
-        // تحديد نوع المستقبل ومعرفه
-        $receiverType = $userType;
-        $receiverId = ($userType === 'doctor') ? $user->doctor->id : $user->patient->id;
-        
-        // تحديث حالة القراءة للرسائل التي ليست من المستخدم الحالي
-        ChatMessage::where('appointment_id', $data['appointment_id'])
-            ->where(function($query) use ($receiverType, $receiverId) {
-                $query->where('sender_type', '!=', $receiverType)
-                    ->orWhere('sender_id', '!=', $receiverId);
-            })
-            ->where('is_read', false)
-            ->update(['is_read' => true]);
-        
-        return response()->json(['success' => true]);
+    $appointment = \App\Models\Appointment::find($appointmentId);
+    
+    if (!$appointment) {
+        return response()->json(['message' => 'الموعد غير موجود'], 404);
     }
     
-    /**
-     * الحصول على المحادثات الحديثة للمستخدم الحالي
-     * 
-     * @return JsonResponse
-     */
-    public function getRecentChats(): JsonResponse
-    {
-        $user = Auth::user();
-        $userType = $user->role;
-        $userId = ($userType === 'doctor') ? $user->doctor->id : $user->patient->id;
-        
-        // الحصول على معرفات المواعيد حيث شارك المستخدم في المحادثة
-        $appointmentIds = [];
-        
-        if ($userType === 'doctor') {
-            // حالة الدكتور: جلب المواعيد الخاصة به
-            $appointmentIds = \App\Models\Appointment::where('doctor_id', $userId)
-                ->pluck('id')
-                ->toArray();
-        } else {
-            // حالة المريض: جلب المواعيد الخاصة به
-            $appointmentIds = \App\Models\Appointment::where('patient_id', $userId)
-                ->pluck('id')
-                ->toArray();
-        }
-        
-        // للمواعيد التي بها رسائل فقط
-        $appointmentIdsWithMessages = ChatMessage::whereIn('appointment_id', $appointmentIds)
-            ->pluck('appointment_id')
-            ->unique()
+    // التحقق من أن المستخدم الحالي هو جزء من هذا الموعد
+    $hasAccess = false;
+    
+    if ($userType === 'doctor' && $appointment->doctor_id === $userId) {
+        $hasAccess = true;
+    } else if ($userType === 'patient' && $appointment->patient_id === $userId) {
+        $hasAccess = true;
+    }
+    
+    if (!$hasAccess) {
+        return response()->json(['message' => 'غير مصرح بالوصول لهذا الموعد'], 403);
+    }
+    
+    // جلب الرسائل
+    $messages = ChatMessage::where('appointment_id', $appointmentId)
+        ->orderBy('created_at')
+        ->get();
+    
+    return response()->json($messages);
+}
+
+/**
+ * تحديد الرسائل كمقروءة
+ */
+public function markAsRead(Request $request): JsonResponse
+{
+    $data = $request->validate([
+        'appointment_id' => 'required|exists:appointments,id',
+    ]);
+    
+    $user = Auth::user();
+    
+    // تحديد نوع المستخدم
+    $userType = null;
+    $userId = null;
+    
+    if ($user instanceof \App\Models\Patient) {
+        $userType = 'patient';
+        $userId = $user->id;
+    } elseif ($user instanceof \App\Models\Doctor) {
+        $userType = 'doctor';
+        $userId = $user->id;
+    } else {
+        return response()->json(['message' => 'نوع المستخدم غير محدد'], 400);
+    }
+    
+    // تحديث حالة القراءة للرسائل التي ليست من المستخدم الحالي
+    ChatMessage::where('appointment_id', $data['appointment_id'])
+        ->where(function($query) use ($userType, $userId) {
+            $query->where('sender_type', '!=', $userType)
+                ->orWhere('sender_id', '!=', $userId);
+        })
+        ->where('is_read', false)
+        ->update(['is_read' => true]);
+    
+    return response()->json(['success' => true]);
+}
+
+/**
+ * الحصول على المحادثات الحديثة للمستخدم الحالي
+ */
+public function getRecentChats(): JsonResponse
+{
+    $user = Auth::user();
+    
+    // تحديد نوع المستخدم
+    $userType = null;
+    $userId = null;
+    
+    if ($user instanceof \App\Models\Patient) {
+        $userType = 'patient';
+        $userId = $user->id;
+    } elseif ($user instanceof \App\Models\Doctor) {
+        $userType = 'doctor';
+        $userId = $user->id;
+    } else {
+        return response()->json(['message' => 'نوع المستخدم غير محدد'], 400);
+    }
+    
+    // الحصول على معرفات المواعيد
+    $appointmentIds = [];
+    
+    if ($userType === 'doctor') {
+        $appointmentIds = \App\Models\Appointment::where('doctor_id', $userId)
+            ->pluck('id')
             ->toArray();
-        
-        // جلب آخر رسالة وعدد الرسائل غير المقروءة لكل موعد
-        $recentChats = [];
-        foreach ($appointmentIdsWithMessages as $appointmentId) {
-            $latestMessage = ChatMessage::where('appointment_id', $appointmentId)
-                ->latest('created_at')
-                ->first();
-                
-            if ($latestMessage) {
-                // حساب عدد الرسائل غير المقروءة للمستخدم الحالي
-                $unreadCount = ChatMessage::where('appointment_id', $appointmentId)
-                    ->where('sender_type', '!=', $userType)
-                    ->where('is_read', false)
-                    ->count();
-                
-                // جلب معلومات الموعد
-                $appointment = \App\Models\Appointment::with(['doctor', 'patient'])
-                    ->find($appointmentId);
-                
-                $recentChats[] = [
-                    'appointment_id' => $appointmentId,
-                    'appointment' => $appointment,
-                    'latest_message' => $latestMessage,
-                    'unread_count' => $unreadCount,
-                ];
-            }
-        }
-        
-        // ترتيب حسب أحدث رسالة
-        usort($recentChats, function($a, $b) {
-            return strtotime($b['latest_message']['created_at']) - strtotime($a['latest_message']['created_at']);
-        });
-        
-        return response()->json($recentChats);
+    } else {
+        $appointmentIds = \App\Models\Appointment::where('patient_id', $userId)
+            ->pluck('id')
+            ->toArray();
     }
+    
+    // للمواعيد التي بها رسائل فقط
+    $appointmentIdsWithMessages = ChatMessage::whereIn('appointment_id', $appointmentIds)
+        ->pluck('appointment_id')
+        ->unique()
+        ->toArray();
+    
+    // جلب آخر رسالة وعدد الرسائل غير المقروءة لكل موعد
+    $recentChats = [];
+    foreach ($appointmentIdsWithMessages as $appointmentId) {
+        $latestMessage = ChatMessage::where('appointment_id', $appointmentId)
+            ->latest('created_at')
+            ->first();
+            
+        if ($latestMessage) {
+            // حساب عدد الرسائل غير المقروءة للمستخدم الحالي
+            $unreadCount = ChatMessage::where('appointment_id', $appointmentId)
+                ->where('sender_type', '!=', $userType)
+                ->where('is_read', false)
+                ->count();
+            
+            // جلب معلومات الموعد
+            $appointment = \App\Models\Appointment::with(['doctor', 'patient'])
+                ->find($appointmentId);
+            
+            $recentChats[] = [
+                'appointment_id' => $appointmentId,
+                'appointment' => $appointment,
+                'latest_message' => $latestMessage,
+                'unread_count' => $unreadCount,
+            ];
+        }
+    }
+    
+    // ترتيب حسب أحدث رسالة
+    usort($recentChats, function($a, $b) {
+        return strtotime($b['latest_message']['created_at']) - strtotime($a['latest_message']['created_at']);
+    });
+    
+    return response()->json($recentChats);
 }
