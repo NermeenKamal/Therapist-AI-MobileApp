@@ -285,7 +285,6 @@ class DoctorController extends Controller
     }
 
     // جلب تفاصيل دكتور واحد
-   <?php
 
 // في DoctorController.php - استبدل الـ show method بهذا الكود المُحسن:
 
