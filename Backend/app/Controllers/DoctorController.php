@@ -15,9 +15,7 @@ use Cloudinary\Cloudinary;
 class DoctorController extends Controller
 {
     /**
-     * تهيئة كائن Cloudinary
-     *
-     * @return Cloudinary
+     * Initialize Cloudinary instance
      */
     private function getCloudinary(): Cloudinary
     {
@@ -34,9 +32,7 @@ class DoctorController extends Controller
     }
 
     /**
-     * التحقق من تكوين Cloudinary
-     *
-     * @return bool
+     * Check if Cloudinary is properly configured
      */
     private function isCloudinaryConfigured(): bool
     {
@@ -44,7 +40,6 @@ class DoctorController extends Controller
         $apiKey = config('services.cloudinary.api_key');
         $apiSecret = config('services.cloudinary.api_secret');
         
-        // تسجيل معلومات التكوين للتشخيص (مع إخفاء المعلومات الحساسة)
         Log::info('Cloudinary configuration check', [
             'cloud_name_set' => !empty($cloudName),
             'api_key_set' => !empty($apiKey),
@@ -54,10 +49,11 @@ class DoctorController extends Controller
         return !empty($cloudName) && !empty($apiKey) && !empty($apiSecret);
     }
 
-    // تعديل بيانات البروفايل للدكتور الحالي
+    /**
+     * Update authenticated doctor's profile
+     */
     public function updateProfile(Request $request): JsonResponse
     {
-        // تسجيل المعلومات للتشخيص
         Log::info('Doctor Update Profile Request', [
             'has_files' => $request->hasFile('profile_image'),
             'all_files' => $request->allFiles(),
@@ -67,22 +63,32 @@ class DoctorController extends Controller
         $doctor = Auth::user();
 
         if (!$doctor || !$doctor instanceof Doctor) {
-            return response()->json(['message' => 'Unauthorized'], 401);
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized access'
+            ], 401);
         }
 
-        // تعريف المصفوفات بشكل صريح
         $updatedFields = [];
         $validated = [];
 
-        // التحقق من البيانات الأساسية
-        $request->validate([
-            'bio' => 'nullable|string',
-            'session_price' => 'nullable|numeric|min:0',
-            'profile_image' => 'nullable|image|max:4096', // 4MB
-            'clinic_address' => 'nullable|string|max:255', // إضافة التحقق من عنوان العيادة
-        ]);
+        // Validate input data
+        try {
+            $request->validate([
+                'bio' => 'nullable|string|max:1000',
+                'session_price' => 'nullable|numeric|min:0',
+                'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:4096',
+                'clinic_address' => 'nullable|string|max:255',
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+        }
 
-        // إضافة البيانات المتحقق منها
+        // Process basic fields
         if ($request->has('bio')) {
             $validated['bio'] = $request->input('bio');
             $updatedFields[] = 'Bio';
@@ -93,440 +99,247 @@ class DoctorController extends Controller
             $updatedFields[] = 'Session Price';
         }
 
-        // إضافة عنوان العيادة إذا تم توفيره
         if ($request->has('clinic_address')) {
             $validated['clinic_address'] = $request->input('clinic_address');
             $updatedFields[] = 'Clinic Address';
         }
 
-        // معالجة الصورة بطريقة أكثر أمانًا
-        try {
-            // التحقق من وجود ملف
-            $hasFile = $request->hasFile('profile_image');
+        // Handle profile image upload
+        if ($request->hasFile('profile_image')) {
+            $profileImage = $request->file('profile_image');
             
-            if ($hasFile) {
-                Log::info('Doctor profile image file detected');
-                
-                $profileImage = $request->file('profile_image');
-                
-                // فحص إضافي للملف
-                if ($profileImage && $profileImage->isValid()) {
-                    // معلومات الملف للتشخيص
-                    $fileInfo = [
-                        'mime' => $profileImage->getMimeType(),
-                        'size' => $profileImage->getSize(),
-                        'name' => $profileImage->getClientOriginalName()
-                    ];
-                    Log::info('File information', $fileInfo);
-                    
-                    // التحقق من تكوين Cloudinary قبل المتابعة
-                    if (!$this->isCloudinaryConfigured()) {
-                        Log::error('Cloudinary configuration missing or invalid');
-                        return response()->json([
-                            'message' => 'Server configuration error',
-                            'details' => 'Image upload service is not properly configured'
-                        ], 500);
-                    }
-                    
-                    try {
-                        // استخدام SDK الرسمي من Cloudinary
-                        $cloudinary = $this->getCloudinary();
-                        
-                        // رفع الملف إلى Cloudinary
-                        $uploadResult = $cloudinary->uploadApi()->upload(
-                            $profileImage->getRealPath(),
-                            [
-                                'folder' => 'doctor_images',
-                                'resource_type' => 'image'
-                            ]
-                        );
-                        
-                        // التحقق من نتيجة الرفع
-                        if ($uploadResult && isset($uploadResult['secure_url'])) {
-                            $uploadedFileUrl = $uploadResult['secure_url'];
-                            $validated['profile_image'] = $uploadedFileUrl;
-                            $updatedFields[] = 'Profile Image';
-                            Log::info('File uploaded successfully', ['url' => $uploadedFileUrl]);
-                        } else {
-                            Log::error('Invalid upload result', [
-                                'result_type' => gettype($uploadResult),
-                                'result' => $uploadResult
-                            ]);
-                            throw new Exception('Invalid upload result from Cloudinary');
-                        }
-                    } catch (Exception $cloudinaryError) {
-                        Log::error('Cloudinary upload error', [
-                            'message' => $cloudinaryError->getMessage(),
-                            'file' => $cloudinaryError->getFile(),
-                            'line' => $cloudinaryError->getLine(),
-                            'trace' => $cloudinaryError->getTraceAsString()
-                        ]);
-                        
-                        // حل بديل: احتفظ بالصورة محليًا إذا فشل Cloudinary
-                        try {
-                            $localPath = $profileImage->store('doctor_images', 'public');
-                            $validated['profile_image'] = asset('storage/' . $localPath);
-                            $updatedFields[] = 'Profile Image (Local Storage)';
-                            Log::info('File stored locally as fallback', ['path' => $localPath]);
-                            
-                            // إعلام المستخدم بأن الصورة تم تخزينها محليًا
-                            return response()->json([
-                                'message' => 'Image stored locally due to cloud storage issue',
-                                'doctor' => $doctor->fresh(),
-                                'updated_fields' => $updatedFields
-                            ]);
-                        } catch (Exception $localStorageError) {
-                            Log::error('Local storage error', [
-                                'message' => $localStorageError->getMessage()
-                            ]);
-                            
-                            return response()->json([
-                                'message' => 'Error uploading image',
-                                'error' => 'Failed to store image in both cloud and local storage'
-                            ], 500);
-                        }
-                    }
-                } else {
-                    Log::warning('Invalid doctor profile image file');
-                    return response()->json([
-                        'message' => 'Invalid profile image file',
-                        'details' => 'The uploaded file is invalid or corrupted'
-                    ], 400);
-                }
-            } else if ($request->has('profile_image')) {
-                // تعامل خاص مع المدخلات غير الصالحة
-                $profileImageInput = $request->input('profile_image');
-                
-                Log::warning('Invalid profile_image input', [
-                    'type' => gettype($profileImageInput),
-                    'value' => $profileImageInput
+            if ($profileImage && $profileImage->isValid()) {
+                Log::info('Processing profile image', [
+                    'mime' => $profileImage->getMimeType(),
+                    'size' => $profileImage->getSize(),
+                    'name' => $profileImage->getClientOriginalName()
                 ]);
                 
+                if (!$this->isCloudinaryConfigured()) {
+                    Log::error('Cloudinary not configured properly');
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Image upload service is not configured'
+                    ], 500);
+                }
+                
+                try {
+                    $cloudinary = $this->getCloudinary();
+                    $uploadResult = $cloudinary->uploadApi()->upload(
+                        $profileImage->getRealPath(),
+                        [
+                            'folder' => 'doctor_images',
+                            'resource_type' => 'image',
+                            'transformation' => [
+                                'width' => 500,
+                                'height' => 500,
+                                'crop' => 'fill'
+                            ]
+                        ]
+                    );
+                    
+                    if ($uploadResult && isset($uploadResult['secure_url'])) {
+                        $validated['profile_image'] = $uploadResult['secure_url'];
+                        $updatedFields[] = 'Profile Image';
+                        Log::info('Image uploaded successfully', ['url' => $uploadResult['secure_url']]);
+                    }
+                } catch (Exception $e) {
+                    Log::error('Cloudinary upload failed', ['error' => $e->getMessage()]);
+                    
+                    // Fallback to local storage
+                    try {
+                        $localPath = $profileImage->store('doctor_images', 'public');
+                        $validated['profile_image'] = asset('storage/' . $localPath);
+                        $updatedFields[] = 'Profile Image (Local)';
+                    } catch (Exception $localError) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Failed to upload image'
+                        ], 500);
+                    }
+                }
+            } else {
                 return response()->json([
-                    'message' => 'Invalid profile image format',
-                    'details' => 'profile_image should be a file, not a JSON object or string',
-                    'received_type' => gettype($profileImageInput)
+                    'success' => false,
+                    'message' => 'Invalid image file'
                 ], 400);
             }
-        } catch (Exception $e) {
-            // تسجيل معلومات الخطأ بالتفصيل
-            Log::error('Doctor profile image processing error', [
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            
-            return response()->json([
-                'message' => 'Error processing profile image',
-                'error' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine()
-            ], 500);
         }
 
-        // تحديث بيانات الدكتور
+        // Update doctor profile
         if (!empty($validated)) {
             try {
                 $doctor->update($validated);
-                
                 Log::info('Doctor profile updated', [
                     'doctor_id' => $doctor->id,
                     'updated_fields' => $updatedFields
                 ]);
             } catch (Exception $e) {
-                Log::error('Error updating doctor profile', [
-                    'message' => $e->getMessage(),
-                    'file' => $e->getFile(),
-                    'line' => $e->getLine()
-                ]);
-                
+                Log::error('Failed to update doctor profile', ['error' => $e->getMessage()]);
                 return response()->json([
-                    'message' => 'Error updating profile',
-                    'error' => $e->getMessage()
+                    'success' => false,
+                    'message' => 'Failed to update profile'
                 ], 500);
             }
         }
 
-        $message = !empty($updatedFields)
-            ? 'Updated: ' . implode(' and ', $updatedFields)
-            : 'No changes were made';
-
         return response()->json([
-            'message' => $message, 
-            'doctor' => $doctor,
-            'updated_fields' => $updatedFields
+            'success' => true,
+            'message' => !empty($updatedFields) 
+                ? 'Profile updated: ' . implode(', ', $updatedFields)
+                : 'No changes were made',
+            'data' => [
+                'doctor' => $doctor->fresh(),
+                'updated_fields' => $updatedFields
+            ]
         ]);
     }
 
-    // جلب كل الدكاترة حسب التخصص مع متوسط التقييم - مُحدث
+    /**
+     * Get all doctors with optional specialty filter
+     */
     public function index(Request $request): JsonResponse
     {
         try {
             $specialty = $request->query('specialty');
+            $perPage = $request->query('per_page', 15);
+            $verified_only = $request->query('verified_only', false);
             
-            // تسجيل معلومات الطلب
             Log::info('Fetching doctors list', [
-                'specialty_filter' => $specialty
+                'specialty_filter' => $specialty,
+                'verified_only' => $verified_only
             ]);
             
-            // بناء الاستعلام
             $query = Doctor::query();
             
-            // إضافة شرط التخصص إذا كان موجود
+            // Apply specialty filter
             if ($specialty) {
                 $query->where('specialization', $specialty);
             }
             
-            // إضافة شرط التحقق (اختياري - حسب متطلباتك)
-            // يمكنك إلغاء التعليق على هذه الأسطر إذا كنت تريد إظهار الدكاترة المُحققين فقط
-            // $query->where('email_verified', true)
-            //       ->where('is_verified_by_ocr', true);
-            
-            // جلب البيانات
-            $doctors = $query->get();
-            
-            Log::info('Doctors found', [
-                'count' => $doctors->count(),
-                'specialty' => $specialty
-            ]);
-            
-            // التحقق من وجود بيانات
-            if ($doctors->isEmpty()) {
-                Log::warning('No doctors found', ['specialty' => $specialty]);
-                return response()->json([]);
+            // Apply verification filter
+            if ($verified_only) {
+                $query->where('email_verified', true)
+                      ->where('is_verified_by_ocr', true);
             }
             
-            // تحويل البيانات
-            $doctorsData = [];
+            // Get doctors with pagination
+            $doctors = $query->paginate($perPage);
             
-            foreach ($doctors as $doctor) {
-                try {
-                    // حساب متوسط التقييم
-                    $avgRating = ChatRating::where('doctor_id', $doctor->id)->avg('sentiment_score');
-                    $ratingsCount = ChatRating::where('doctor_id', $doctor->id)->count();
-                    
-                    $doctorsData[] = [
-                        'id' => $doctor->id,
-                        'name' => $doctor->name,
-                        'profile_image' => $doctor->profile_image,
-                        'specialization' => $doctor->specialization,
-                        'session_price' => $doctor->session_price,
-                        'bio' => $doctor->bio,
-                        'clinic_address' => $doctor->clinic_address,
-                        'average_rating' => $avgRating ? round($avgRating, 2) : null,
-                        'ratings_count' => $ratingsCount,
-                        'email_verified' => $doctor->email_verified,
-                        'is_verified_by_ocr' => $doctor->is_verified_by_ocr
-                    ];
-                    
-                } catch (\Exception $e) {
-                    Log::error('Error processing doctor data', [
-                        'doctor_id' => $doctor->id,
-                        'error' => $e->getMessage()
-                    ]);
-                    
-                    // إضافة البيانات الأساسية على الأقل
-                    $doctorsData[] = [
-                        'id' => $doctor->id,
-                        'name' => $doctor->name,
-                        'specialization' => $doctor->specialization,
-                        'error' => 'Error loading complete data'
-                    ];
-                }
-            }
+            // Transform data
+            $doctorsData = $doctors->map(function ($doctor) {
+                $avgRating = ChatRating::where('doctor_id', $doctor->id)->avg('sentiment_score');
+                $ratingsCount = ChatRating::where('doctor_id', $doctor->id)->count();
+                
+                return [
+                    'id' => $doctor->id,
+                    'name' => $doctor->name,
+                    'profile_image' => $doctor->profile_image,
+                    'specialization' => $doctor->specialization,
+                    'session_price' => $doctor->session_price,
+                    'bio' => $doctor->bio,
+                    'clinic_address' => $doctor->clinic_address,
+                    'average_rating' => $avgRating ? round($avgRating, 2) : null,
+                    'ratings_count' => $ratingsCount,
+                    'email_verified' => $doctor->email_verified,
+                    'is_verified_by_ocr' => $doctor->is_verified_by_ocr
+                ];
+            });
             
-            Log::info('Doctors data prepared', [
-                'processed_count' => count($doctorsData)
+            return response()->json([
+                'success' => true,
+                'data' => $doctorsData,
+                'pagination' => [
+                    'current_page' => $doctors->currentPage(),
+                    'per_page' => $doctors->perPage(),
+                    'total' => $doctors->total(),
+                    'last_page' => $doctors->lastPage(),
+                ]
             ]);
             
-            return response()->json($doctorsData);
-            
-        } catch (\Exception $e) {
-            Log::error('Error fetching doctors list', [
-                'error' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine()
-            ]);
-            
+        } catch (Exception $e) {
+            Log::error('Error fetching doctors', ['error' => $e->getMessage()]);
             return response()->json([
-                'message' => 'Error fetching doctors',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    // جلب تفاصيل دكتور واحد - مُحدث
-
-// جلب تفاصيل دكتور واحد - مُحدث
-public function show($id): JsonResponse
-{
-    try {
-        Log::info('Fetching doctor details', ['doctor_id' => $id]);
-        
-        // جلب البيانات مع تحديد الحقول المطلوبة فقط
-        $doctor = Doctor::select([
-            'id',
-            'name',
-            'email',
-            'mobile_number',
-            'specialization',
-            'bio',
-            'clinic_address',
-            'session_price',
-            'profile_image',
-            'medical_license_path',
-            'license_number',
-            'email_verified',
-            'is_verified_by_ocr',
-            'created_at'
-        ])->find($id);
-
-        if (!$doctor) {
-            Log::warning('Doctor not found', ['doctor_id' => $id]);
-            return response()->json([], 404); // إرجاع array فارغ بدلاً من object
-        }
-
-        // جلب الجداول الزمنية
-        $schedules = DoctorSchedule::where('doctor_id', $doctor->id)
-            ->select(['id', 'day', 'start_time', 'end_time'])
-            ->get();
-
-        // حساب متوسط التقييم
-        $avgRating = ChatRating::where('doctor_id', $doctor->id)
-            ->avg('sentiment_score');
-        $ratingsCount = ChatRating::where('doctor_id', $doctor->id)
-            ->count();
-
-        // بناء هيكل البيانات للإرجاع (نفس format الـ index)
-        $responseData = [
-            'id' => $doctor->id,
-            'name' => $doctor->name,
-            'profile_image' => $doctor->profile_image,
-            'specialization' => $doctor->specialization,
-            'session_price' => $doctor->session_price,
-            'bio' => $doctor->bio,
-            'clinic_address' => $doctor->clinic_address,
-            'average_rating' => $avgRating ? round($avgRating, 2) : null,
-            'ratings_count' => $ratingsCount,
-            'email_verified' => $doctor->email_verified,
-            'is_verified_by_ocr' => $doctor->is_verified_by_ocr,
-            // معلومات إضافية للـ show
-            'email' => $doctor->email,
-            'mobile_number' => $doctor->mobile_number,
-            'medical_license' => $doctor->medical_license_path,
-            'license_number' => $doctor->license_number,
-            'schedules' => $schedules,
-            'joined_at' => $doctor->created_at->format('Y-m-d')
-        ];
-
-        Log::info('Successfully fetched doctor details', ['doctor_id' => $id]);
-        
-        // إرجاع البيانات مباشرة كـ array (مثل index method)
-        return response()->json([$responseData]);
-
-    } catch (\Exception $e) {
-        Log::error('Failed to fetch doctor details', [
-            'doctor_id' => $id,
-            'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString()
-        ]);
-        
-        return response()->json([], 500); // إرجاع array فارغ في حالة الخطأ
-    }
-}
-
-    // إضافة method لفحص البيانات الأساسية للـ index
-    public function debugIndex(Request $request): JsonResponse
-    {
-        try {
-            $specialty = $request->query('specialty');
-            
-            // فحص إجمالي عدد الدكاترة
-            $totalDoctors = Doctor::count();
-            
-            // فحص الدكاترة المُحققين
-            $verifiedDoctors = Doctor::where('email_verified', true)
-                                    ->where('is_verified_by_ocr', true)
-                                    ->count();
-            
-            // فحص التخصصات المتاحة
-            $specializations = Doctor::distinct('specialization')
-                                    ->pluck('specialization')
-                                    ->filter()
-                                    ->values();
-            
-            // فحص الدكاترة حسب التخصص المطلوب
-            $doctorsInSpecialty = $specialty ? 
-                Doctor::where('specialization', $specialty)->count() : null;
-            
-            // عينة من بيانات الدكاترة
-            $sampleDoctors = Doctor::select('id', 'name', 'email', 'specialization', 'email_verified', 'is_verified_by_ocr')
-                                  ->take(5)
-                                  ->get();
-            
-            return response()->json([
-                'total_doctors' => $totalDoctors,
-                'verified_doctors' => $verifiedDoctors,
-                'specializations' => $specializations,
-                'requested_specialty' => $specialty,
-                'doctors_in_specialty' => $doctorsInSpecialty,
-                'sample_doctors' => $sampleDoctors,
-                'chat_rating_records' => ChatRating::count()
-            ]);
-            
-        } catch (\Exception $e) {
-            return response()->json([
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    // إضافة method للتشخيص للـ show
-    public function debugShow($id): JsonResponse
-    {
-        try {
-            // فحص وجود الدكتور في قاعدة البيانات
-            $doctorExists = Doctor::where('id', $id)->exists();
-            $doctorCount = Doctor::count();
-            $allDoctorIds = Doctor::pluck('id')->take(10)->toArray(); // أخذ أول 10 فقط
-            
-            // فحص الجداول الزمنية
-            $schedulesCount = DoctorSchedule::where('doctor_id', $id)->count();
-            
-            // فحص التقييمات
-            $ratingsCount = ChatRating::where('doctor_id', $id)->count();
-            
-            // جلب بيانات الدكتور إذا كان موجود
-            $doctorData = null;
-            if ($doctorExists) {
-                $doctorData = Doctor::select('id', 'name', 'email', 'specialization', 'email_verified', 'is_verified_by_ocr')
-                                   ->find($id);
-            }
-            
-            return response()->json([
-                'doctor_exists' => $doctorExists,
-                'total_doctors_count' => $doctorCount,
-                'sample_doctor_ids' => $allDoctorIds,
-                'schedules_count' => $schedulesCount,
-                'ratings_count' => $ratingsCount,
-                'requested_id' => $id,
-                'id_type' => gettype($id),
-                'doctor_data' => $doctorData
-            ]);
-            
-        } catch (\Exception $e) {
-            return response()->json([
-                'error' => $e->getMessage(),
-                'requested_id' => $id
+                'success' => false,
+                'message' => 'Failed to fetch doctors'
             ], 500);
         }
     }
 
     /**
-     * اختبار تكوين Cloudinary
-     *
-     * @return JsonResponse
+     * Get single doctor details
+     */
+    public function show($id): JsonResponse
+    {
+        try {
+            Log::info('Fetching doctor details', ['doctor_id' => $id]);
+            
+            $doctor = Doctor::select([
+                'id', 'name', 'email', 'mobile_number', 'specialization',
+                'bio', 'clinic_address', 'session_price', 'profile_image',
+                'medical_license_path', 'license_number', 'email_verified',
+                'is_verified_by_ocr', 'created_at'
+            ])->find($id);
+
+            if (!$doctor) {
+                Log::warning('Doctor not found', ['doctor_id' => $id]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Doctor not found'
+                ], 404);
+            }
+
+            // Get schedules
+            $schedules = DoctorSchedule::where('doctor_id', $doctor->id)
+                ->select(['id', 'day', 'start_time', 'end_time'])
+                ->get();
+
+            // Calculate ratings
+            $avgRating = ChatRating::where('doctor_id', $doctor->id)->avg('sentiment_score');
+            $ratingsCount = ChatRating::where('doctor_id', $doctor->id)->count();
+
+            $responseData = [
+                'id' => $doctor->id,
+                'name' => $doctor->name,
+                'email' => $doctor->email,
+                'mobile_number' => $doctor->mobile_number,
+                'profile_image' => $doctor->profile_image,
+                'specialization' => $doctor->specialization,
+                'session_price' => $doctor->session_price,
+                'bio' => $doctor->bio,
+                'clinic_address' => $doctor->clinic_address,
+                'average_rating' => $avgRating ? round($avgRating, 2) : null,
+                'ratings_count' => $ratingsCount,
+                'email_verified' => $doctor->email_verified,
+                'is_verified_by_ocr' => $doctor->is_verified_by_ocr,
+                'medical_license' => $doctor->medical_license_path,
+                'license_number' => $doctor->license_number,
+                'schedules' => $schedules,
+                'joined_at' => $doctor->created_at->format('Y-m-d')
+            ];
+
+            Log::info('Successfully fetched doctor details', ['doctor_id' => $id]);
+            
+            return response()->json([
+                'success' => true,
+                'data' => $responseData
+            ]);
+
+        } catch (Exception $e) {
+            Log::error('Failed to fetch doctor details', [
+                'doctor_id' => $id,
+                'error' => $e->getMessage()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch doctor details'
+            ], 500);
+        }
+    }
+
+    /**
+     * Test Cloudinary configuration
      */
     public function testCloudinaryConfig(): JsonResponse
     {
@@ -535,10 +348,13 @@ public function show($id): JsonResponse
         $apiSecret = config('services.cloudinary.api_secret');
         
         return response()->json([
-            'cloud_name_set' => !empty($cloudName),
-            'api_key_set' => !empty($apiKey),
-            'api_secret_set' => !empty($apiSecret),
-            'all_set' => !empty($cloudName) && !empty($apiKey) && !empty($apiSecret)
+            'success' => true,
+            'data' => [
+                'cloud_name_set' => !empty($cloudName),
+                'api_key_set' => !empty($apiKey),
+                'api_secret_set' => !empty($apiSecret),
+                'all_configured' => !empty($cloudName) && !empty($apiKey) && !empty($apiSecret)
+            ]
         ]);
     }
 }
