@@ -2,37 +2,44 @@
 
 namespace App\Jobs;
 
+use App\Models\ChatRating;
+use App\Services\BertSentimentService;
+use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
 
 class AnalyzeChatSentiment implements ShouldQueue
 {
-    use Queueable;
+    use InteractsWithQueue, Queueable, SerializesModels;
 
-    /**
-     * Create a new job instance.
-     */
-    public function __construct()
+    protected $appointmentId;
+    protected $patientId;
+    protected $message;
+
+    public function __construct($appointmentId, $patientId, $message)
     {
-        //
+        $this->appointmentId = $appointmentId;
+        $this->patientId = $patientId;
+        $this->message = $message;
     }
 
-    /**
-     * Execute the job.
-     */
     public function handle()
     {
         try {
-            $bertResult = app(BertSentimentService::class)->analyze($this->message);
-            ChatRating::create([
-                'appointment_id' => $this->appointmentId,
-                'patient_id' => $this->patientId,
-                'sentiment_score' => $bertResult['score'],
-                'sentiment_label' => $bertResult['label'],
-            ]);
+            $bertService = new BertSentimentService();
+            $bertResult = $bertService->analyze($this->message);
+
+            if ($bertResult) {
+                ChatRating::create([
+                    'appointment_id' => $this->appointmentId,
+                    'patient_id' => $this->patientId,
+                    'sentiment_score' => $bertResult['score'],
+                    'sentiment_label' => $bertResult['label'],
+                ]);
+            }
         } catch (\Exception $e) {
-            \Log::error('BERT analysis failed in job: ' . $e->getMessage());
+            \Log::error('AnalyzeChatSentiment Job failed', ['message' => $e->getMessage()]);
         }
     }
-
 }
