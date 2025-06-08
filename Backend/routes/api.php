@@ -112,7 +112,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // Protected Doctor Routes (require authentication)
     Route::post('/doctor/update-profile', [DoctorController::class, 'updateProfile']);
     Route::get('/doctors', [DoctorController::class, 'index']);
-    Route::get('/doctors/{id}', [DoctorController::class, 'show'])->where('id', '[0-9]+');
+    // Route::get('/doctors/{id}', [DoctorController::class, 'show'])->where('id', '[0-9]+');
+    Route::get('/doctor-profile/{id}', [DoctorController::class, 'show'])
+    ->where('id', '[0-9]+')
+    ->name('doctor.profile');
 
     // Article Routes
     Route::get('/articles', [ArticleController::class, 'index']);
