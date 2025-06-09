@@ -4,7 +4,6 @@ WORKDIR /app
 
 COPY requirements.txt .
 
-# نزلي فقط الأدوات المطلوبة
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app.py .
