@@ -15,7 +15,7 @@ return [
 
     'ai' => [
         'chatbot_endpoint' => env('AI_CHATBOT_ENDPOINT', 'https://cozy-renewal-production.up.railway.app/'),
-        'bert_endpoint' => env('BERT_SENTIMENT_ENDPOINT', 'https://bert-model-production.up.railway.app/'),
+        // 'bert_endpoint' => env('BERT_SENTIMENT_ENDPOINT', 'https://bert-model-production.up.railway.app/'),
     ],
 
     'mailgun' => [
