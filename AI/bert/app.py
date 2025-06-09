@@ -1,25 +1,30 @@
-from fastapi import FastAPI
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
-import torch
+from fastapi import FastAPI, Request
+import requests
+import os
 
 app = FastAPI()
 
-MODEL_NAME = "prajjwal1/bert-tiny"  
+HF_API_URL = "https://api-inference.huggingface.co/models/prajjwal1/bert-tiny"
+HF_TOKEN = os.getenv("HF_TOKEN")
 
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-model = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME)
+# تجهيز الهيدر بالتوكن
+headers = {"Authorization": f"Bearer {HF_TOKEN}"}
 
 @app.get("/")
-def read_root():
-    return {"message": "Model is running!"}
+def root():
+    return {"message": "Model via HuggingFace API is ready"}
 
 @app.post("/predict")
-def predict(text: str):
-    inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True)
-    outputs = model(**inputs)
-    probs = torch.nn.functional.softmax(outputs.logits, dim=-1)
-    confidence, prediction = torch.max(probs, dim=1)
-    return {
-        "prediction": prediction.item(),
-        "confidence": round(confidence.item(), 4)
-    }
+async def predict(request: Request):
+    data = await request.json()
+    text = data.get("text", "")
+    if not text:
+        return {"error": "Missing text"}
+    
+    response = requests.post(HF_API_URL, headers=headers, json={"inputs": text})
+    try:
+        result = response.json()
+    except:
+        return {"error": "Failed to parse Hugging Face response"}
+    
+    return result
