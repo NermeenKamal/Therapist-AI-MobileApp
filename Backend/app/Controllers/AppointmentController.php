@@ -75,122 +75,122 @@ class AppointmentController extends Controller
 
     // المريض يحجز موعد جاهز
     public function bookAvailableAppointment(Request $request, int $id): JsonResponse
-{
-    $appointment = Appointment::where('id', $id)
-        ->whereNull('patient_id')
-        ->where('status', Appointment::STATUS_AVAILABLE)
-        ->firstOrFail();
+    {
+        $appointment = Appointment::where('id', $id)
+            ->whereNull('patient_id')
+            ->where('status', Appointment::STATUS_AVAILABLE)
+            ->firstOrFail();
 
-    $appointment->update([
-        'patient_id' => Auth::id(),
-        'status'     => Appointment::STATUS_PENDING,
-    ]);
-
-    try {
-        if ($appointment->doctor && $appointment->doctor->fcm_token) {
-            $this->fcm->sendToUser(
-                $appointment->doctor->fcm_token,
-                'New appointment booked',
-                'Appointment booked by: ' . Auth::user()->name,
-                ['appointment_id' => $appointment->id]
-            );
-        }
-    } catch (\Exception $e) {
-        Log::warning('FCM notification failed in bookAvailableAppointment: ' . $e->getMessage(), [
-            'appointment_id' => $appointment->id,
-            'doctor_id' => $appointment->doctor_id,
-            'patient_id' => Auth::id()
+        $appointment->update([
+            'patient_id' => Auth::id(),
+            'status'     => Appointment::STATUS_PENDING,
         ]);
+
+        // إشعار للدكتور - مع حماية من أخطاء Firebase
+        try {
+            if ($appointment->doctor && $appointment->doctor->fcm_token) {
+                $this->fcm->sendToUser(
+                    $appointment->doctor->fcm_token,
+                    'New appointment booked',
+                    'Appointment booked by: ' . Auth::user()->name,
+                    ['appointment_id' => $appointment->id]
+                );
+            }
+        } catch (\Exception $e) {
+            // تسجيل الخطأ بدون إيقاف العملية
+            Log::warning('FCM notification failed in bookAvailableAppointment: ' . $e->getMessage(), [
+                'appointment_id' => $appointment->id,
+                'doctor_id' => $appointment->doctor_id,
+                'patient_id' => Auth::id()
+            ]);
+        }
+
+        $data = $appointment->only([
+            'notes',
+            'status',
+            'appointment_date',
+            'price',
+            'patient_id',
+            'doctor_id'
+        ]);
+
+        return response()->json($data);
     }
-
-    $data = $appointment->only([
-        'notes',
-        'status',
-        'appointment_date',
-        'price',
-        'patient_id',
-        'doctor_id'
-    ]);
-
-    return response()->json($data);
-}
-
 
     // الدكتور يؤكد الحجز
-public function confirm(Request $request, int $id): JsonResponse
-{
-    $appointment = Appointment::findOrFail($id);
-    $this->authorize('confirm', $appointment);
+    public function confirm(Request $request, int $id): JsonResponse
+    {
+        $appointment = Appointment::findOrFail($id);
+        $this->authorize('confirm', $appointment);
 
-    if ($appointment->status !== Appointment::STATUS_PENDING) {
-        return response()->json(['message' => 'Only pending appointments can be confirmed.'], 400);
-    }
-
-    $appointment->update([
-        'status' => Appointment::STATUS_BOOKED,
-    ]);
-
-    // إشعار للمريض
-    try {
-        if ($appointment->patient && $appointment->patient->fcm_token) {
-            $this->fcm->sendToUser(
-                $appointment->patient->fcm_token,
-                'Appointment confirmed',
-                'Your appointment has been confirmed by the doctor.',
-                ['appointment_id' => $appointment->id]
-            );
+        if ($appointment->status !== Appointment::STATUS_PENDING) {
+            return response()->json(['message' => 'Only pending appointments can be confirmed.'], 400);
         }
-    } catch (\Exception $e) {
-        Log::warning('FCM notification failed in confirm: ' . $e->getMessage(), [
-            'appointment_id' => $appointment->id,
-            'user_id' => Auth::id()
+
+        $appointment->update([
+            'status' => Appointment::STATUS_BOOKED,
         ]);
+
+        // إشعار للمريض
+        try {
+            if ($appointment->patient && $appointment->patient->fcm_token) {
+                $this->fcm->sendToUser(
+                    $appointment->patient->fcm_token,
+                    'Appointment confirmed',
+                    'Your appointment has been confirmed by the doctor.',
+                    ['appointment_id' => $appointment->id]
+                );
+            }
+        } catch (\Exception $e) {
+            Log::warning('FCM notification failed in confirm: ' . $e->getMessage(), [
+                'appointment_id' => $appointment->id,
+                'user_id' => Auth::id()
+            ]);
+        }
+
+        return response()->json($appointment);
     }
-
-    return response()->json($appointment);
-}
-
 
     // تعديل موعد (تاريخ/ملاحظات)
     public function update(Request $request, int $id): JsonResponse
-{
-    $appointment = Appointment::findOrFail($id);
-    $this->authorize('update', $appointment);
+    {
+        $appointment = Appointment::findOrFail($id);
+        $this->authorize('update', $appointment);
 
-    $data = $request->validate([
-        'appointment_date' => 'sometimes|date',
-        'notes'            => 'nullable|string',
-        'price'            => 'nullable|numeric',
-    ]);
+        $data = $request->validate([
+            'appointment_date' => 'sometimes|date',
+            'notes'            => 'nullable|string',
+            'price'            => 'nullable|numeric',
+        ]);
 
-    $appointment->update($data);
+        $appointment->update($data);
 
-    // إشعار الطرف الآخر مع حماية الأخطاء
-    try {
-        $other = $appointment->patient_id === auth()->id()
-            ? $appointment->doctor
-            : $appointment->patient;
+        // إشعار الطرف الآخر مع حماية الأخطاء
+        try {
+            $other = $appointment->patient_id === auth()->id()
+                ? $appointment->doctor
+                : $appointment->patient;
 
-        if ($other && $other->fcm_token) {
-            $this->fcm->sendToUser(
-                $other->fcm_token,
-                'Appointment edited',
-                'Appointment edited number: ' . $appointment->id,
-                ['appointment_id' => $appointment->id]
-            );
+            if ($other && $other->fcm_token) {
+                $this->fcm->sendToUser(
+                    $other->fcm_token,
+                    'Appointment edited',
+                    'Appointment edited number: ' . $appointment->id,
+                    ['appointment_id' => $appointment->id]
+                );
+            }
+        } catch (\Exception $e) {
+            Log::warning('FCM notification failed in update: ' . $e->getMessage(), [
+                'appointment_id' => $appointment->id,
+                'user_id' => auth()->id(),
+            ]);
         }
-    } catch (\Exception $e) {
-        Log::warning('FCM notification failed in update: ' . $e->getMessage(), [
-            'appointment_id' => $appointment->id,
-            'user_id' => auth()->id(),
+
+        return response()->json([
+            'message' => 'Appointment updated successfully',
+            'appointment' => new AppointmentResource($appointment->load(['doctor', 'patient']))
         ]);
     }
-
-    return response()->json([
-        'message' => 'Appointment updated successfully',
-        'appointment' => new AppointmentResource($appointment->load(['doctor', 'patient']))
-    ]);
-}
 
     // إلغاء موعد
     public function cancel(Request $request, int $id): JsonResponse
@@ -225,9 +225,9 @@ public function confirm(Request $request, int $id): JsonResponse
         }
 
         return response()->json([
-        'message' => 'Appointment updated successfully',
-        'appointment' => new AppointmentResource($appointment->load(['doctor', 'patient']))
-    ]);
+            'message' => 'Appointment updated successfully',
+            'appointment' => new AppointmentResource($appointment->load(['doctor', 'patient']))
+        ]);
     }
 
     // جلب التخصصات
