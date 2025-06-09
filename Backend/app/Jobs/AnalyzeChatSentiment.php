@@ -34,7 +34,7 @@ class AnalyzeChatSentiment implements ShouldQueue
     ]);
 
     try {
-        $bertService = new BertSentimentService();
+        $bertService = app(BertSentimentService::class);
         $bertResult = $bertService->analyze($this->message);
 
         \Log::info("BERT service returned", $bertResult);
