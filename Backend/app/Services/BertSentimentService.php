@@ -6,11 +6,11 @@ use Illuminate\Support\Facades\Http;
 
 class BertSentimentService
 {
-    protected string $bertEndpoint;
+    public string $bertEndpoint;
 
     public function __construct()
     {
-        $this->bertEndpoint = config('services.ai.bert_endpoint');
+        $this->bertEndpoint = config('services.bert.endpoint');
     }
 
     /**
