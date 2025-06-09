@@ -75,38 +75,46 @@ class AppointmentController extends Controller
 
     // المريض يحجز موعد جاهز
     public function bookAvailableAppointment(Request $request, int $id): JsonResponse
-    {
-        $appointment = Appointment::where('id', $id)
-            ->whereNull('patient_id')
-            ->where('status', Appointment::STATUS_AVAILABLE)
-            ->firstOrFail();
+{
+    $appointment = Appointment::where('id', $id)
+        ->whereNull('patient_id')
+        ->where('status', Appointment::STATUS_AVAILABLE)
+        ->firstOrFail();
 
-        $appointment->update([
-            'patient_id' => Auth::id(),
-            'status'     => Appointment::STATUS_PENDING,
-        ]);
+    $appointment->update([
+        'patient_id' => Auth::id(),
+        'status'     => Appointment::STATUS_PENDING,
+    ]);
 
-        // إشعار للدكتور - مع حماية من أخطاء Firebase
-        try {
-            if ($appointment->doctor && $appointment->doctor->fcm_token) {
-                $this->fcm->sendToUser(
-                    $appointment->doctor->fcm_token,
-                    'New appointment booked',
-                    'Appointment booked by: ' . Auth::user()->name,
-                    ['appointment_id' => $appointment->id]
-                );
-            }
-        } catch (\Exception $e) {
-            // تسجيل الخطأ بدون إيقاف العملية
-            Log::warning('FCM notification failed in bookAvailableAppointment: ' . $e->getMessage(), [
-                'appointment_id' => $appointment->id,
-                'doctor_id' => $appointment->doctor_id,
-                'patient_id' => Auth::id()
-            ]);
+    try {
+        if ($appointment->doctor && $appointment->doctor->fcm_token) {
+            $this->fcm->sendToUser(
+                $appointment->doctor->fcm_token,
+                'New appointment booked',
+                'Appointment booked by: ' . Auth::user()->name,
+                ['appointment_id' => $appointment->id]
+            );
         }
-
-        return response()->json($appointment->load('doctor'));
+    } catch (\Exception $e) {
+        Log::warning('FCM notification failed in bookAvailableAppointment: ' . $e->getMessage(), [
+            'appointment_id' => $appointment->id,
+            'doctor_id' => $appointment->doctor_id,
+            'patient_id' => Auth::id()
+        ]);
     }
+
+    $data = $appointment->only([
+        'notes',
+        'status',
+        'appointment_date',
+        'price',
+        'patient_id',
+        'doctor_id'
+    ]);
+
+    return response()->json($data);
+}
+
 
     // الدكتور يؤكد الحجز
 public function confirm(Request $request, int $id): JsonResponse
