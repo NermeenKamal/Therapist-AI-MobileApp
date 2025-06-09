@@ -6,16 +6,17 @@ use Illuminate\Support\Facades\Http;
 
 class BertSentimentService
 {
-    public string $bertEndpoint;
+    public ?string $bertEndpoint;
 
-   public function __construct()
+    public function __construct()
     {
         $this->bertEndpoint = config('services.bert.endpoint');
     
-        if (empty($this->bertEndpoint)) {
-            throw new \Exception('BERT endpoint configuration is missing!');
+        if (!$this->bertEndpoint) {
+            throw new \Exception("BERT endpoint is not configured properly.");
         }
     }
+
 
 
     /**
