@@ -7,7 +7,5 @@ __pycache__/
 *.ipynb
 .env
 venv/
-.idea/
-.git/
-.gitignore
 datasets/
+cache/
