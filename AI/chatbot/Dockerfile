@@ -6,18 +6,21 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
+    software-properties-common \
     && rm -rf /var/lib/apt/lists/*
 
-# نسخ الملفات
+# نسخ ملفات المشروع
 COPY requirements.txt .
 COPY app.py .
 
-# تثبيت مكتبة torch + باقي المتطلبات
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
-RUN pip install --no-cache-dir -r requirements.txt
+# تحديث pip
+RUN pip install --upgrade pip
 
-# تعيين كاش huggingface داخل الحاوية
-ENV HF_HOME=/app/.cache/huggingface
+# تثبيت Torch من مستودع CPU فقط
+RUN pip install --no-cache-dir torch==2.1.1 --index-url https://download.pytorch.org/whl/cpu
+
+# تثبيت باقي المتطلبات
+RUN pip install --no-cache-dir -r requirements.txt
 
 # تعريض المنفذ
 EXPOSE 8000
