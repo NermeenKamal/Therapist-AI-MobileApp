@@ -7,6 +7,11 @@ return [
     'fcm' => [
         'server_key' => env('FCM_SERVER_KEY'),
     ],
+    
+    'bert' => [
+    'endpoint' => env('BERT_API_ENDPOINT'),
+    ],
+
 
     'ai' => [
         'chatbot_endpoint' => env('AI_CHATBOT_ENDPOINT', 'https://cozy-renewal-production.up.railway.app/'),
