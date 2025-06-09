@@ -16,8 +16,6 @@ COPY app.py .
 # تحديث pip
 RUN pip install --upgrade pip
 
-# تثبيت Torch من مستودع CPU فقط
-RUN pip install --no-cache-dir torch==2.1.1 --index-url https://download.pytorch.org/whl/cpu
 
 # تثبيت باقي المتطلبات
 RUN pip install --no-cache-dir -r requirements.txt
