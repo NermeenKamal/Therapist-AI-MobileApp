@@ -1,5 +1,6 @@
 FROM php:8.2-cli
 
+# تثبيت الحزم الأساسية
 RUN apt-get update && apt-get install -y --no-install-recommends \
     unzip \
     git \
@@ -14,36 +15,48 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     supervisor \
     wget \
+    libzip-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# إعداد إضافات PHP
+RUN docker-php-ext-configure gd --with-jpeg --with-webp --with-freetype
+RUN docker-php-ext-install pdo pdo_mysql mbstring exif pcntl bcmath gd zip
+
+# تثبيت Imagick
 RUN pecl install imagick && docker-php-ext-enable imagick
 
-RUN docker-php-ext-install pdo pdo_mysql mbstring exif pcntl bcmath gd
-
-WORKDIR /var/www
-
+# إعداد Tesseract OCR للغتين العربية والإنجليزية
 RUN mkdir -p /usr/share/tesseract-ocr/4.00/tessdata && \
-    wget https://github.com/tesseract-ocr/tessdata/raw/main/ara.traineddata -P /usr/share/tesseract-ocr/4.00/tessdata/ && \
-    wget https://github.com/tesseract-ocr/tessdata/raw/main/eng.traineddata -P /usr/share/tesseract-ocr/4.00/tessdata/
-
-RUN mkdir -p /var/log/supervisor && \
-    touch /var/log/supervisor/supervisord.log && \
-    chown -R www-data:www-data /var/log/supervisor
+    wget -q https://github.com/tesseract-ocr/tessdata/raw/main/ara.traineddata -P /usr/share/tesseract-ocr/4.00/tessdata/ && \
+    wget -q https://github.com/tesseract-ocr/tessdata/raw/main/eng.traineddata -P /usr/share/tesseract-ocr/4.00/tessdata/
 
 ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/4.00/tessdata/
 
+# إعداد مجلدات Supervisor
+RUN mkdir -p /var/log/supervisor && \
+    mkdir -p /var/run/supervisor && \
+    chown -R www-data:www-data /var/log/supervisor /var/run/supervisor
+
+WORKDIR /var/www
+
+# نسخ ملفات الاعتماد أولاً لتحسين بناء الطبقات
+COPY composer.json composer.lock ./
+
+# تثبيت Composer والاعتمادات
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer && \
+    composer install --no-interaction --optimize-autoloader --no-dev
+
+# نسخ باقي الملفات
 COPY . .
 
-RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+# ضبط صلاحيات التخزين
+RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache && \
+    chmod -R 775 /var/www/storage /var/www/bootstrap/cache
 
-RUN composer install --no-interaction --optimize-autoloader
-
-RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
-
-# انسخي ملف supervisord.conf لاحقاً
-COPY ./supervisord.conf /etc/supervisord.conf
+# نسخ ملف إعدادات Supervisor
+COPY ./supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 USER www-data
 
-# تشغيل supervisor لتشغيل أكثر من خدمة
-CMD ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisord.conf"]
+# أمر التشغيل النهائي
+CMD ["sh", "-c", "php artisan migrate --force && /usr/bin/supervisord -n -c /etc/supervisor/conf.d/supervisord.conf"]
