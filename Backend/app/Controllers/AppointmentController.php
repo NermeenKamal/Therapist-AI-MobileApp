@@ -26,22 +26,22 @@ class AppointmentController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
-    
+
         $appointments = Appointment::where(function($q) use ($user) {
             $q->where('patient_id', $user->id)
               ->orWhere('doctor_id', $user->id);
         })->with(['doctor', 'patient'])->get();
-    
+
         return response()->json(AppointmentIndexResource::collection($appointments));
     }
 
     // الدكتور ينشئ موعد متاح
     public function createAvailableAppointment(Request $request): JsonResponse
     {
-         \Log::info('Authenticated user:', [
-        'class' => get_class(Auth::user()),
-        'attributes' => Auth::user()?->toArray(),
-    ]);
+        \Log::info('Authenticated user:', [
+            'class' => get_class(Auth::user()),
+            'attributes' => Auth::user()?->toArray(),
+        ]);
 
         $this->authorize('create', Appointment::class);
 
@@ -148,7 +148,16 @@ class AppointmentController extends Controller
             ]);
         }
 
-        return response()->json($appointment);
+        $data = $appointment->only([
+            'notes',
+            'status',
+            'appointment_date',
+            'price',
+            'patient_id',
+            'doctor_id'
+        ]);
+
+        return response()->json($data);
     }
 
     // تعديل موعد (تاريخ/ملاحظات)
@@ -186,9 +195,18 @@ class AppointmentController extends Controller
             ]);
         }
 
+        $filtered = $appointment->only([
+            'notes',
+            'status',
+            'appointment_date',
+            'price',
+            'patient_id',
+            'doctor_id'
+        ]);
+
         return response()->json([
             'message' => 'Appointment updated successfully',
-            'appointment' => new AppointmentResource($appointment->load(['doctor', 'patient']))
+            'appointment' => $filtered
         ]);
     }
 
@@ -224,9 +242,18 @@ class AppointmentController extends Controller
             ]);
         }
 
+        $filtered = $appointment->only([
+            'notes',
+            'status',
+            'appointment_date',
+            'price',
+            'patient_id',
+            'doctor_id'
+        ]);
+
         return response()->json([
             'message' => 'Appointment updated successfully',
-            'appointment' => new AppointmentResource($appointment->load(['doctor', 'patient']))
+            'appointment' => $filtered
         ]);
     }
 
