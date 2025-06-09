@@ -27,8 +27,9 @@ app.add_middleware(
 # تحميل النموذج والتوكينايزر
 try:
     print("==== Loading model... ====")
-    tokenizer = AutoTokenizer.from_pretrained("nlptown/bert-base-multilingual-uncased-sentiment")
-    model = AutoModelForSequenceClassification.from_pretrained("nlptown/bert-base-multilingual-uncased-sentiment")
+    tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
+    model = AutoModelForSequenceClassification.from_pretrained("distilbert-base-uncased")
+
     model.eval()
     print("==== Model loaded! ====")
 except Exception as e:
