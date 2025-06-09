@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pkl
+*.pt
+*.zip
+*.tar.gz
+*.ipynb
+.env
+venv/
+.idea/
+.git/
+.gitignore
+datasets/
