@@ -33,23 +33,22 @@ RUN mkdir -p /usr/share/tesseract-ocr/4.00/tessdata && \
 ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/4.00/tessdata/
 
 # إعداد مجلدات Supervisor
-RUN mkdir -p /var/log/supervisor && \
-    mkdir -p /var/run/supervisor && \
+RUN mkdir -p /var/log/supervisor /var/run/supervisor && \
     chown -R www-data:www-data /var/log/supervisor /var/run/supervisor
 
 WORKDIR /var/www
 
-# نسخ ملفات الاعتماد أولاً لتحسين بناء الطبقات
-COPY composer.json composer.lock ./
+# انسخ ملفات composer و artisan عشان تكون متوفرة عند تثبيت الحزم
+COPY composer.json composer.lock artisan ./
 
 # تثبيت Composer والاعتمادات
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer && \
     composer install --no-interaction --optimize-autoloader --no-dev
 
-# نسخ باقي الملفات
+# انسخ باقي ملفات المشروع
 COPY . .
 
-# ضبط صلاحيات التخزين
+# ضبط صلاحيات التخزين والـ cache
 RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache && \
     chmod -R 775 /var/www/storage /var/www/bootstrap/cache
 
