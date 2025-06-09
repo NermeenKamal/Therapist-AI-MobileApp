@@ -10,12 +10,13 @@ class BertSentimentService
 
     public function __construct()
     {
-        $this->bertEndpoint = env('BERT_ENDPOINT');
-
-        if (is_null($this->bertEndpoint)) {
-            throw new \Exception("BERT_ENDPOINT not set in .env file");
+        $this->bertEndpoint = env('BERT_ENDPOINT', '');
+    
+        if (empty($this->bertEndpoint)) {
+            throw new \RuntimeException('BERT_ENDPOINT is not set in the .env file');
         }
     }
+
 
     public function analyze(string $text): array
     {
