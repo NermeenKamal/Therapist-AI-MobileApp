@@ -19,19 +19,27 @@ class BertSentimentService
      * @return array ['score' => float, 'label' => string]
      */
     public function analyze(string $message): array
-    {
-        $response = Http::post($this->bertEndpoint . '/analyze', [
-            'text' => $message
-        ]);
+{
+    $response = Http::post($this->bertEndpoint . '/analyze', [
+        'text' => $message
+    ]);
 
-        if ($response->successful()) {
-            return $response->json();
-        }
+    if ($response->successful()) {
+        $data = $response->json();
 
         return [
-            'score' => null,
-            'label' => 'unknown',
-            'error' => 'BERT model unavailable'
+            'score' => $data['score'] ?? null,
+            'label' => $data['label'] ?? 'unknown',
+            'feedback' => $data['feedback'] ?? null,
         ];
     }
+
+    return [
+        'score' => null,
+        'label' => 'unknown',
+        'feedback' => null,
+        'error' => 'BERT model unavailable'
+    ];
+}
+
 } 
