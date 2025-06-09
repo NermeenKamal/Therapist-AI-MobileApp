@@ -11,6 +11,8 @@ import warnings
 
 print("==== 🚀 FastAPI Chatbot is starting ====")
 
+os.environ["TRANSFORMERS_CACHE"] = "./cache"
+
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 
