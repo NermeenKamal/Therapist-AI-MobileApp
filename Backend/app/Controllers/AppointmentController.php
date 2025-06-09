@@ -106,6 +106,7 @@ class AppointmentController extends Controller
         }
 
         $data = $appointment->only([
+            'id',
             'notes',
             'status',
             'appointment_date',
@@ -114,7 +115,7 @@ class AppointmentController extends Controller
             'doctor_id'
         ]);
 
-        return response()->json($data);
+        return response()->json(['appointment' => $data]);
     }
 
     // الدكتور يؤكد الحجز
@@ -149,6 +150,7 @@ class AppointmentController extends Controller
         }
 
         $data = $appointment->only([
+            'id',
             'notes',
             'status',
             'appointment_date',
@@ -157,7 +159,7 @@ class AppointmentController extends Controller
             'doctor_id'
         ]);
 
-        return response()->json($data);
+        return response()->json(['appointment' => $data]);
     }
 
     // تعديل موعد (تاريخ/ملاحظات)
@@ -196,6 +198,7 @@ class AppointmentController extends Controller
         }
 
         $filtered = $appointment->only([
+            'id',
             'notes',
             'status',
             'appointment_date',
@@ -243,6 +246,7 @@ class AppointmentController extends Controller
         }
 
         $filtered = $appointment->only([
+            'id',
             'notes',
             'status',
             'appointment_date',
