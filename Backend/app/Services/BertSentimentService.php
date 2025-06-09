@@ -6,46 +6,48 @@ use Illuminate\Support\Facades\Http;
 
 class BertSentimentService
 {
-    public ?string $bertEndpoint;
+    protected string $bertEndpoint;
 
     public function __construct()
     {
-        $this->bertEndpoint = config('services.bert.endpoint');
-    
-        if (!$this->bertEndpoint) {
-            throw new \Exception("BERT endpoint is not configured properly.");
+        $this->bertEndpoint = env('BERT_ENDPOINT');
+
+        if (is_null($this->bertEndpoint)) {
+            throw new \Exception("BERT_ENDPOINT not set in .env file");
         }
     }
 
+    public function analyze(string $text): array
+    {
+        try {
+            $response = Http::post($this->bertEndpoint, [
+                'text' => $text,
+            ]);
 
+            if ($response->failed()) {
+                \Log::error('BERT API request failed', [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+                return [
+                    'score' => null,
+                    'label' => 'error',
+                    'feedback' => null,
+                ];
+            }
 
-    /**
-     * Analyze a message using the BERT model.
-     * @param string $message
-     * @return array ['score' => float, 'label' => string]
-     */
-    public function analyze(string $message): array
-{
-    $response = Http::post($this->bertEndpoint . '/analyze', [
-        'text' => $message
-    ]);
+            return $response->json();
 
-    if ($response->successful()) {
-        $data = $response->json();
+        } catch (\Exception $e) {
+            \Log::error('Exception while calling BERT API', [
+                'message' => $e->getMessage(),
+            ]);
 
-        return [
-            'score' => $data['score'] ?? null,
-            'label' => $data['label'] ?? 'unknown',
-            'feedback' => $data['feedback'] ?? null,
-        ];
+            return [
+                'score' => null,
+                'label' => 'exception',
+                'feedback' => null,
+            ];
+        }
     }
-
-    return [
-        'score' => null,
-        'label' => 'unknown',
-        'feedback' => null,
-        'error' => 'BERT model unavailable'
-    ];
 }
-
-} 
