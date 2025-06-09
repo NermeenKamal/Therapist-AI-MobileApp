@@ -9,8 +9,9 @@ return [
     ],
     
     'bert' => [
-        'endpoint' => env('BERT_ENDPOINT'),
+    'endpoint' => env('BERT_API_ENDPOINT'),
     ],
+
 
 
     'ai' => [
