@@ -31,6 +31,14 @@ class AnalyzeChatSentiment implements ShouldQueue
             $bertService = new BertSentimentService();
             $bertResult = $bertService->analyze($this->message);
 
+            $score = $bertResult['score'] ?? null;
+            $label = $bertResult['label'] ?? 'unknown';
+            
+            if (is_null($score)) {
+                \Log::warning("Empty or invalid score from BERT service", $bertResult);
+                return; // أو تعامل مع الحالة بشكل مناسب
+            }
+
             if ($bertResult) {
                 ChatRating::create([
                     'appointment_id'   => $this->appointmentId,
