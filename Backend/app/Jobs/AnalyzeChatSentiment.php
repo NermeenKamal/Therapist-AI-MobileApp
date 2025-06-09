@@ -32,10 +32,12 @@ class AnalyzeChatSentiment implements ShouldQueue
 
             if ($bertResult) {
                 ChatRating::create([
-                    'appointment_id' => $this->appointmentId,
-                    'patient_id' => $this->patientId,
-                    'sentiment_score' => $bertResult['score'],
-                    'sentiment_label' => $bertResult['label'],
+                    'appointment_id'   => $this->appointmentId,
+                    'patient_id'       => $this->patientId,
+                    'rating'           => round($bertResult['score'] * 5), // لو كان بين 0 و 1
+                    'feedback'         => $bertResult['feedback'] ?? null,
+                    'sentiment_score'  => $bertResult['score'],
+                    'sentiment_label'  => $bertResult['label'],
                 ]);
             }
         } catch (\Exception $e) {
