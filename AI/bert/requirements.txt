@@ -1,5 +1,4 @@
 fastapi==0.110.0
 uvicorn==0.29.0
 transformers==4.38.2
-torch==1.10.0+cpu
-psutil==5.9.8
+torch>=2.0.0
