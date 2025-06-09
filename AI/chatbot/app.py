@@ -8,6 +8,10 @@ from dotenv import load_dotenv
 import psutil
 from typing import List, Optional
 
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+
+
 # تحميل المتغيرات البيئية
 load_dotenv()
 
