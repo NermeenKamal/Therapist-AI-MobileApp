@@ -6,6 +6,7 @@ import torch
 import os
 from dotenv import load_dotenv
 import psutil
+from typing import List, Optional
 
 # تحميل المتغيرات البيئية
 load_dotenv()
@@ -37,7 +38,7 @@ except Exception as e:
 
 class ChatInput(BaseModel):
     message: str
-    chat_history: list = []
+    chat_history: Optional[List[str]] = None  # تعديل هنا
 
 @app.get("/")
 async def root():
@@ -47,14 +48,14 @@ async def root():
 async def chat(input_data: ChatInput):
     try:
         # تحضير النص
-        chat_history = input_data.chat_history
+        chat_history = input_data.chat_history or []  # تعديل هنا
         user_message = input_data.message
         
         # تحويل التاريخ إلى نص
         chat_history_text = " ".join(chat_history)
         
         # تحضير النص الكامل
-        full_text = f"{chat_history_text} {user_message}"
+        full_text = f"{chat_history_text} {user_message}".strip()
         
         # ترميز النص
         inputs = tokenizer.encode(full_text + tokenizer.eos_token, return_tensors='pt')
@@ -91,4 +92,4 @@ if __name__ == "__main__":
     import uvicorn
     print("==== Starting Uvicorn server... ====")
     port = int(os.environ.get("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port) 
+    uvicorn.run(app, host="0.0.0.0", port=port)
