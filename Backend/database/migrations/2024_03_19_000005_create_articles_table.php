@@ -8,14 +8,17 @@ return new class extends Migration
 {
     public function up()
     {
-        Schema::create('articles', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('doctor_id')->constrained('doctors')->onDelete('cascade');
-            $table->string('title');
-            $table->text('content');
-            $table->string('image_path')->nullable();
-            $table->timestamps();
-        });
+       if (!Schema::hasTable('articles')) {
+            Schema::create('articles', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('doctor_id')->constrained()->onDelete('cascade');
+                $table->string('title');
+                $table->text('content');
+                $table->string('image_path')->nullable();
+                $table->timestamps();
+            });
+        }
+
     }
 
     public function down()
