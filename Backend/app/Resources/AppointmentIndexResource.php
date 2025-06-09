@@ -18,12 +18,6 @@ class AppointmentIndexResource extends JsonResource
                 'id' => $this->doctor->id,
                 'name' => $this->doctor->name,
                 'specialization' => $this->doctor->specialization,
-                'profile_image' => $this->doctor->profile_image,
-            ],
-            'patient' => [
-                'id' => $this->patient->id,
-                'name' => $this->patient->name,
-                'profile_image' => $this->patient->profile_image,
             ],
         ];
     }
