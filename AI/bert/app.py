@@ -5,6 +5,8 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
 import os
 from dotenv import load_dotenv
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 # تحميل المتغيرات البيئية
 load_dotenv()
