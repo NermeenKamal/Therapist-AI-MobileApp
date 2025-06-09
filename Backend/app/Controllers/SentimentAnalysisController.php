@@ -4,29 +4,28 @@ namespace App\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
-use App\Services\SentimentAnalysisService;
+use App\Jobs\AnalyzeChatSentiment;
 
 class SentimentAnalysisController extends Controller
 {
-    protected SentimentAnalysisService $sentimentService;
-
-    public function __construct(SentimentAnalysisService $sentimentService)
-    {
-        $this->sentimentService = $sentimentService;
-    }
-
     public function analyze(Request $request): JsonResponse
     {
         $request->validate([
-            'chat_history' => 'required|array|min:1',
-            'chat_history.*.message' => 'required|string',
+            'appointment_id' => 'required|integer',
+            'patient_id' => 'required|integer',
+            'message' => 'required|string',
         ]);
 
-        $result = $this->sentimentService->analyze($request->input('chat_history'));
+        // إرسال Job للعمل في الخلفية
+        AnalyzeChatSentiment::dispatch(
+            $request->appointment_id,
+            $request->patient_id,
+            $request->message
+        );
 
         return response()->json([
-            'sentiment_score' => $result['score'],
-            'label' => $result['label'],
+            'status' => 'queued',
+            'message' => 'Chat message sent for sentiment analysis.'
         ]);
     }
 }
