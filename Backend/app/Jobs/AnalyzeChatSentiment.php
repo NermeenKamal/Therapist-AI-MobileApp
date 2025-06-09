@@ -25,7 +25,7 @@ class AnalyzeChatSentiment implements ShouldQueue
         $this->message = $message;
     }
 
-    public function handle()
+   public function handle()
 {
     \Log::info("Starting AnalyzeChatSentiment job", [
         'appointment_id' => $this->appointmentId,
@@ -34,6 +34,10 @@ class AnalyzeChatSentiment implements ShouldQueue
     ]);
 
     try {
+        \Log::info("Config value: ", [
+            'endpoint' => config('services.bert.endpoint')
+        ]);
+
         $bertService = app(BertSentimentService::class);
         $bertResult = $bertService->analyze($this->message);
 
@@ -65,5 +69,6 @@ class AnalyzeChatSentiment implements ShouldQueue
         ]);
     }
 }
+
 
 }
