@@ -26,31 +26,44 @@ class AnalyzeChatSentiment implements ShouldQueue
     }
 
     public function handle()
-    {
-        try {
-            $bertService = new BertSentimentService();
-            $bertResult = $bertService->analyze($this->message);
+{
+    \Log::info("Starting AnalyzeChatSentiment job", [
+        'appointment_id' => $this->appointmentId,
+        'patient_id' => $this->patientId,
+        'message' => $this->message,
+    ]);
 
-            $score = $bertResult['score'] ?? null;
-            $label = $bertResult['label'] ?? 'unknown';
-            
-            if (is_null($score)) {
-                \Log::warning("Empty or invalid score from BERT service", $bertResult);
-                return; // أو تعامل مع الحالة بشكل مناسب
-            }
+    try {
+        $bertService = new BertSentimentService();
+        $bertResult = $bertService->analyze($this->message);
 
-            if ($bertResult) {
-                ChatRating::create([
-                    'appointment_id'   => $this->appointmentId,
-                    'patient_id'       => $this->patientId,
-                    'rating'           => round($bertResult['score'] * 5), // لو كان بين 0 و 1
-                    'feedback'         => $bertResult['feedback'] ?? null,
-                    'sentiment_score'  => $bertResult['score'],
-                    'sentiment_label'  => $bertResult['label'],
-                ]);
-            }
-        } catch (\Exception $e) {
-            \Log::error('AnalyzeChatSentiment Job failed', ['message' => $e->getMessage()]);
+        \Log::info("BERT service returned", $bertResult);
+
+        $score = $bertResult['score'] ?? null;
+        $label = $bertResult['label'] ?? 'unknown';
+
+        if (is_null($score)) {
+            \Log::warning("Empty or invalid score from BERT service", $bertResult);
+            return;
         }
+
+        ChatRating::create([
+            'appointment_id'   => $this->appointmentId,
+            'patient_id'       => $this->patientId,
+            'rating'           => round($score * 5),
+            'feedback'         => $bertResult['feedback'] ?? null,
+            'sentiment_score'  => $score,
+            'sentiment_label'  => $label,
+        ]);
+
+        \Log::info("ChatRating created successfully");
+
+    } catch (\Exception $e) {
+        \Log::error('AnalyzeChatSentiment job failed', [
+            'message' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]);
     }
+}
+
 }
