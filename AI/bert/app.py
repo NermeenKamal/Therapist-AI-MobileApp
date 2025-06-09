@@ -16,15 +16,22 @@ app = FastAPI(title="BERT Model API")
 # إعداد CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # في الإنتاج، حدد النطاقات المسموح بها
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-print("==== Loading model... ====")
-# تحميل النموذج
-print("==== Model loaded! ====")
+# تحميل النموذج والتوكينايزر
+try:
+    print("==== Loading model... ====")
+    tokenizer = AutoTokenizer.from_pretrained("nlptown/bert-base-multilingual-uncased-sentiment")
+    model = AutoModelForSequenceClassification.from_pretrained("nlptown/bert-base-multilingual-uncased-sentiment")
+    model.eval()
+    print("==== Model loaded! ====")
+except Exception as e:
+    print(f"==== Error loading model: {e} ====")
+    raise
 
 class TextInput(BaseModel):
     text: str
@@ -37,24 +44,20 @@ async def root():
 async def analyze_text(input_data: TextInput):
     try:
         print("==== /analyze CALLED ====")
-        print(f"Received text: {input_data.text}")
         inputs = tokenizer(input_data.text, return_tensors="pt", truncation=True, padding=True)
-
         with torch.no_grad():
             outputs = model(**inputs)
             predictions = torch.nn.functional.softmax(outputs.logits, dim=-1)
 
         results = predictions[0].tolist()
         score = max(results)
-        label = "positive" if results[1] > results[0] else "negative"
-
-        # feedback بسيط تقديري – ممكن تطوريه لاحقًا
-        feedback = f"The message expresses a {label} feeling."
+        label_index = results.index(score)
+        label = f"{label_index + 1}-star"
 
         return {
             "score": score,
             "label": label,
-            "feedback": feedback
+            "feedback": f"The message seems to be {label} sentiment."
         }
 
     except Exception as e:
@@ -64,5 +67,4 @@ async def analyze_text(input_data: TextInput):
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 8000))
-    print("==== Starting Uvicorn server... ====")
-    uvicorn.run(app, host="0.0.0.0", port=port) 
+    uvicorn.run(app, host="0.0.0.0", port=port)
