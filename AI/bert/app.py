@@ -11,8 +11,8 @@ app = FastAPI()
 
 # تحميل نموذج BERT خفيف الوزن
 print("🚀 Loading BERT...")
-tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
-model = AutoModelForSequenceClassification.from_pretrained("distilbert-base-uncased")
+tokenizer = AutoTokenizer.from_pretrained("distilgpt2")
+model = AutoModelForCausalLM.from_pretrained("distilgpt2")
 model.eval()
 
 class TextInput(BaseModel):
