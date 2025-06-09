@@ -7,8 +7,10 @@ import os
 from dotenv import load_dotenv
 import psutil
 from typing import List, Optional
-
 import warnings
+
+print("==== 🚀 FastAPI Chatbot is starting ====")
+
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 
