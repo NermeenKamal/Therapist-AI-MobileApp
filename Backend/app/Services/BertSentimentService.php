@@ -8,10 +8,15 @@ class BertSentimentService
 {
     public string $bertEndpoint;
 
-    public function __construct()
+   public function __construct()
     {
         $this->bertEndpoint = config('services.bert.endpoint');
+    
+        if (empty($this->bertEndpoint)) {
+            throw new \Exception('BERT endpoint configuration is missing!');
+        }
     }
+
 
     /**
      * Analyze a message using the BERT model.
