@@ -26,6 +26,10 @@ RUN mkdir -p /usr/share/tesseract-ocr/4.00/tessdata && \
     wget https://github.com/tesseract-ocr/tessdata/raw/main/ara.traineddata -P /usr/share/tesseract-ocr/4.00/tessdata/ && \
     wget https://github.com/tesseract-ocr/tessdata/raw/main/eng.traineddata -P /usr/share/tesseract-ocr/4.00/tessdata/
 
+RUN mkdir -p /var/log/supervisor && \
+    touch /var/log/supervisor/supervisord.log && \
+    chown -R www-data:www-data /var/log/supervisor
+
 ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/4.00/tessdata/
 
 COPY . .
@@ -42,4 +46,4 @@ COPY ./supervisord.conf /etc/supervisord.conf
 USER www-data
 
 # تشغيل supervisor لتشغيل أكثر من خدمة
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]
+CMD ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisord.conf"]
