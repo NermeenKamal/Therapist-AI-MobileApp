@@ -10,10 +10,10 @@ class BertSentimentService
 
     public function __construct()
     {
-        $this->bertEndpoint = env('BERT_ENDPOINT', '');
-    
+        $this->bertEndpoint = config('services.bert.endpoint');
+
         if (empty($this->bertEndpoint)) {
-            throw new \RuntimeException('BERT_ENDPOINT is not set in the .env file');
+            throw new \RuntimeException('BERT API endpoint is not configured properly.');
         }
     }
 
