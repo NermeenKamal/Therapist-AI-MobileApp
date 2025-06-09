@@ -1,6 +1,4 @@
-fastapi==0.104.1
-uvicorn==0.24.0
-transformers==4.30.2
-python-dotenv
-psutil
-torch==2.1.1
+fastapi
+uvicorn
+transformers
+torch==2.0.1
