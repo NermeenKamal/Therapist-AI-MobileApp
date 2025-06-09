@@ -9,7 +9,7 @@ class AppointmentPolicy
     /** الدكتور فقط يقدر ينشئ موعد متاح */
     public function create($user): bool
     {
-        return $user instanceof Doctor;   // ✅
+        return $user instanceof Doctor; 
     }
 
     public function cancel($user, Appointment $appointment): bool
