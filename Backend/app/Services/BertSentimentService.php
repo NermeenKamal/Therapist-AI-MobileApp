@@ -54,6 +54,13 @@ class BertSentimentService
         }
 
         $data = $response->json();
+        
+        if (!isset($data['result']) || !is_array($data['result']) || count($data['result']) === 0) {
+            \Log::error('Unexpected BERT response structure', ['response' => $data]);
+            return $this->defaultResult();
+        }
+        
+        $results = collect($data['result']);
 
         if (!is_array($data) || !isset($data[0]['label'])) {
             throw new \Exception('Invalid BERT response format');
