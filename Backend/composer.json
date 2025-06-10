@@ -9,8 +9,7 @@
     "require": {
         "php": "^8.2",
         "ext-pdo": "*",
-        "ext-fileinfo": "*",
-        "ext-imagick": "*",
+        "cloudinary-labs/cloudinary-laravel": "^3.0",
         "cloudinary/cloudinary_php": "^3.1",
         "doctrine/dbal": "^4.2",
         "guzzlehttp/guzzle": "^7.9",
@@ -20,11 +19,10 @@
         "laravel/framework": "^11.31",
         "laravel/sanctum": "^4.1",
         "laravel/tinker": "^2.9",
+        "openai-php/laravel": "0.13.0",
         "symfony/mailer": "^7.0",
-        "thiagoalessio/tesseract_ocr": "^2.13",
-        "openai-php/laravel": "^2.0"
+        "thiagoalessio/tesseract_ocr": "^2.13"
     },
-
 
     "require-dev": {
         "fakerphp/faker": "^1.23",
