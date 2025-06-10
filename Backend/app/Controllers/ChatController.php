@@ -140,9 +140,12 @@ class ChatController extends Controller
 
         $response = $chat->toArray();
         if ($rating) {
-            $response['sentiment_score'] = $rating->sentiment_score;
-            $response['sentiment_label'] = $rating->sentiment_label;
-        }
+    $response['sentiment_score'] = $rating->sentiment_score;
+    $response['sentiment_label'] = $rating->sentiment_label;
+    $response['feedback'] = $rating->feedback;
+    $response['rating'] = $rating->rating;
+}
+
 
         return response()->json(['data' => $response], 201);
     }
