@@ -9,7 +9,8 @@ return [
     ],
 
     'bert' => [
-        'endpoint' => 'https://api-inference.huggingface.co/models/distilbert-base-uncased-finetuned-sst-2-english',
+        'endpoint' => env('BERT_API_ENDPOINT'),
+        'token' => env('HF_TOKEN'), 
     ],
 
     
