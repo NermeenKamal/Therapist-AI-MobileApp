@@ -7,10 +7,15 @@ return [
     'fcm' => [
         'server_key' => env('FCM_SERVER_KEY'),
     ],
-    
+
     'bert' => [
-    'endpoint' => env('BERT_API_ENDPOINT'),
+        'endpoint' => 'https://api-inference.huggingface.co/models/distilbert-base-uncased-finetuned-sst-2-english',
     ],
+
+    
+    // 'bert' => [
+    // 'endpoint' => env('BERT_API_ENDPOINT'),
+    // ],
 
 
 
