@@ -1,72 +1,101 @@
+# from fastapi import FastAPI, Request
+# import torch
+# from transformers import DistilBertTokenizer, DistilBertForSequenceClassification
+
+# app = FastAPI()
+
+# # ✅ تحميل الموديل والـ tokenizer مرة واحدة عند بدء التشغيل
+# tokenizer = DistilBertTokenizer.from_pretrained("distilbert-base-uncased-finetuned-sst-2-english")
+# model = DistilBertForSequenceClassification.from_pretrained("distilbert-base-uncased-finetuned-sst-2-english")
+
+# @app.get("/health")
+# def health_check():
+#     return {"status": "ok", "service": "bert", "model": "distilbert-base-uncased-finetuned-sst-2-english"}
+
+# @app.get("/test-model")
+# def test_model():
+#     sample_text = "You are a great doctor!"
+#     inputs = tokenizer(sample_text, return_tensors="pt")
+#     with torch.no_grad():
+#         logits = model(**inputs).logits
+#     predicted_class_id = logits.argmax().item()
+#     label = model.config.id2label[predicted_class_id]
+#     score = torch.nn.functional.softmax(logits, dim=1).max().item()
+
+#     return {
+#         "input": sample_text,
+#         "label": label,
+#         "score": score
+#     }
+
+# @app.get("/debug")
+# def debug():
+#     return {
+#         "model_loaded": True,
+#         "labels": model.config.id2label
+#     }
+
+# @app.post("/predict")
+# async def predict(request: Request):
+#     data = await request.json()
+#     text = data.get("inputs")
+#     if not text:
+#         return {"error": "Missing text"}
+
+#     try:
+#         inputs = tokenizer(text, return_tensors="pt")
+#         with torch.no_grad():
+#             logits = model(**inputs).logits
+#         predicted_class_id = logits.argmax().item()
+#         label = model.config.id2label[predicted_class_id]
+#         score = torch.nn.functional.softmax(logits, dim=1).max().item()
+
+#         return {
+#             "label": label,
+#             "score": score
+#         }
+
+#     except Exception as e:
+#         return {
+#             "error": "Prediction failed",
+#             "detail": str(e)
+#         }
+
+
+
+
+
+
+
+
+
+
+
+
+
 from fastapi import FastAPI, Request
-import torch
-from transformers import DistilBertTokenizer, DistilBertForSequenceClassification
+import os
+from huggingface_hub import InferenceClient
 
 app = FastAPI()
 
-# ✅ تحميل الموديل والـ tokenizer مرة واحدة عند بدء التشغيل
-tokenizer = DistilBertTokenizer.from_pretrained("distilbert-base-uncased-finetuned-sst-2-english")
-model = DistilBertForSequenceClassification.from_pretrained("distilbert-base-uncased-finetuned-sst-2-english")
+HF_TOKEN = os.getenv("HF_TOKEN")
 
-@app.get("/health")
-def health_check():
-    return {"status": "ok", "service": "bert", "model": "distilbert-base-uncased-finetuned-sst-2-english"}
-
-@app.get("/test-model")
-def test_model():
-    sample_text = "You are a great doctor!"
-    inputs = tokenizer(sample_text, return_tensors="pt")
-    with torch.no_grad():
-        logits = model(**inputs).logits
-    predicted_class_id = logits.argmax().item()
-    label = model.config.id2label[predicted_class_id]
-    score = torch.nn.functional.softmax(logits, dim=1).max().item()
-
-    return {
-        "input": sample_text,
-        "label": label,
-        "score": score
-    }
-
-@app.get("/debug")
-def debug():
-    return {
-        "model_loaded": True,
-        "labels": model.config.id2label
-    }
+client = InferenceClient(
+    model="distilbert/distilbert-base-uncased-finetuned-sst-2-english",
+    token=HF_TOKEN,
+)
 
 @app.post("/predict")
 async def predict(request: Request):
     data = await request.json()
     text = data.get("inputs")
+
     if not text:
-        return {"error": "Missing text"}
+        return {"error": "Missing input text"}
 
-    try:
-        inputs = tokenizer(text, return_tensors="pt")
-        with torch.no_grad():
-            logits = model(**inputs).logits
-        predicted_class_id = logits.argmax().item()
-        label = model.config.id2label[predicted_class_id]
-        score = torch.nn.functional.softmax(logits, dim=1).max().item()
-
-        return {
-            "label": label,
-            "score": score
-        }
-
-    except Exception as e:
-        return {
-            "error": "Prediction failed",
-            "detail": str(e)
-        }
-
-
-
-
-
-
-
+    result = client.text_classification(text)
+    return {"result": result}
 
 
 
