@@ -72,10 +72,11 @@ class BertSentimentService
 
         // Simple feedback logic
         $feedback = match ($label) {
-            'positive' => 'ممتاز! استمر في مشاركة مشاعرك الإيجابية.',
-            'negative' => 'يبدو أنك تمر بمشاعر صعبة، نحن هنا لدعمك.',
-            default => 'شكرًا لمشاركتك، يرجى المحاولة مجددًا إذا كنت تريد نتيجة أدق.',
+            'positive' => 'Great response. Keep up the good interaction.',
+            'negative' => 'This doctor seems to exhibit unprofessional behavior.',
+            default => 'Thanks for your message. Please try again for more accurate results.',
         };
+
 
         return [
             'label' => $label,
