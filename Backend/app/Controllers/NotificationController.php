@@ -50,4 +50,39 @@ class NotificationController extends Controller
 
         return response()->json(['message' => 'FCM token saved']);
     }
+
+    public function sendNotification(Request $request): JsonResponse
+{
+    $request->validate([
+        'title' => 'required|string',
+        'message' => 'required|string',
+        'user_type' => 'required|in:doctor,patient',
+        'user_id' => 'required|integer'
+    ]);
+
+    $userModel = $request->user_type === 'doctor'
+        ? \App\Models\Doctor::class
+        : \App\Models\Patient::class;
+
+    $user = $userModel::findOrFail($request->user_id);
+
+    // احفظ الإشعار في قاعدة البيانات
+    $notification = $user->notifications()->create([
+        'title' => $request->title,
+        'message' => $request->message,
+    ]);
+
+    // ابعت الإشعار لو عنده FCM Token
+    if ($user->fcm_token) {
+        $this->fcm->sendToUser(
+            $user->fcm_token,
+            $request->title,
+            $request->message,
+            ['notification_id' => $notification->id]
+        );
+    }
+
+    return response()->json(['message' => 'Notification sent successfully']);
+}
+
 }
