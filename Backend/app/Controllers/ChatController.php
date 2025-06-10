@@ -78,19 +78,30 @@ class ChatController extends Controller
 
         $rating = null;
         if ($senderType === 'doctor') {
-            try {
-                $bertResult = $this->bert->analyze($data['message']);
+    try {
+        $bertResult = $this->bert->analyze($data['message']);
 
-                $rating = ChatRating::create([
-                    'appointment_id' => $data['appointment_id'],
-                    'patient_id' => $receiverId,
-                    'sentiment_score' => $bertResult['score'],
-                    'sentiment_label' => $bertResult['label'],
-                ]);
-            } catch (\Exception $e) {
-                // يمكن تسجيل الخطأ هنا إذا لزم
-            }
-        }
+        // توليد قيمة rating رقمية من التحليل
+        $ratingValue = match (strtolower($bertResult['label'])) {
+            'positive' => 5,
+            'neutral'  => 3,
+            'negative' => 1,
+            default    => 2,
+        };
+
+        $rating = ChatRating::create([
+            'appointment_id'   => $data['appointment_id'],
+            'patient_id'       => $receiverId,
+            'rating'           => $ratingValue,
+            'feedback'         => $bertResult['feedback'],
+            'sentiment_score'  => $bertResult['score'],
+            'sentiment_label'  => $bertResult['label'],
+        ]);
+    } catch (\Exception $e) {
+        \Log::error('BERT error: ' . $e->getMessage());
+    }
+}
+
 
         try {
             $firebaseMessage = [
