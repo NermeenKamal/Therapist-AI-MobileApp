@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Http;
 class BertSentimentService
 {
     protected string $bertEndpoint;
-    protected string $token;
+    protected ?string $token;
 
     public function __construct()
     {
@@ -17,72 +17,60 @@ class BertSentimentService
         if (empty($this->bertEndpoint)) {
             throw new \RuntimeException('BERT API endpoint is not configured properly.');
         }
-
-        if (empty($this->token)) {
-            throw new \RuntimeException('Hugging Face token (HF_TOKEN) is missing.');
-        }
     }
 
     public function analyze(string $text): array
     {
         try {
-            $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $this->token,
-            ])->post($this->bertEndpoint, [
+            $request = Http::withHeaders(
+                $this->token ? ['Authorization' => 'Bearer ' . $this->token] : []
+            )->post($this->bertEndpoint, [
                 'inputs' => $text,
             ]);
 
-            \Log::info('BERT Response Status', ['status' => $response->status()]);
-            \Log::info('BERT Raw Body', ['body' => $response->body()]);
+            \Log::info('BERT response status', ['status' => $request->status()]);
+            \Log::info('BERT raw body', ['body' => $request->body()]);
 
-            if ($response->failed()) {
+            if ($request->failed()) {
                 \Log::error('BERT API request failed', [
-                    'status' => $response->status(),
-                    'body' => $response->body(),
+                    'status' => $request->status(),
+                    'body' => $request->body(),
                 ]);
-
                 return $this->defaultResult();
             }
 
-            $data = $response->json();
+            $data = $request->json();
+            \Log::debug('BERT decoded JSON:', $data);
 
-            // Check if it's valid list-style BERT output
-            if (!is_array($data) || !isset($data[0]['label'])) {
-                throw new \Exception('Invalid BERT response format');
+            // تحقق من الشكل المتوقع للرد
+            if (!is_array($data) || !isset($data[0]['label'], $data[0]['score'])) {
+                \Log::warning('Invalid or incomplete BERT response', ['response' => $data]);
+                return $this->defaultResult();
             }
 
             $results = collect($data);
             $positive = $results->firstWhere('label', 'POSITIVE')['score'] ?? 0;
             $negative = $results->firstWhere('label', 'NEGATIVE')['score'] ?? 0;
 
-            $scoreDifference = abs($positive - $negative);
+            $total = $positive + $negative;
+            $rawRating = $total > 0 ? ($positive / $total) * 5 : 2.5;
+            $roundedRating = round($rawRating * 2) / 2;
 
-            // If scores are too close, label as neutral
-            if ($scoreDifference < 0.2) {
-                $label = 'neutral';
-            } else {
-                $label = $positive > $negative ? 'positive' : 'negative';
-            }
-
+            $label = $positive > $negative ? 'positive' : ($negative > $positive ? 'negative' : 'neutral');
             $score = max($positive, $negative);
 
-            // Feedback text
             $feedback = match ($label) {
                 'positive' => 'The doctor\'s response was professional and supportive.',
                 'negative' => 'The doctor\'s response may be inappropriate or unhelpful.',
-                default => 'User experience was neutral.',
+                default => 'Could not analyze sentiment.',
             };
-
-            // Rating logic
-            $rawRating = ($positive / ($positive + $negative)) * 5;
-            $roundedRating = round($rawRating * 2) / 2;
 
             return [
                 'label' => $label,
                 'score' => $score,
                 'feedback' => $feedback,
                 'rating' => $roundedRating,
-                'raw_result' => $data, // Optional: keep raw if needed for debugging
+                'result' => $data, // نحتفظ بالرد الأصلي
             ];
         } catch (\Exception $e) {
             \Log::error('Exception during sentiment analysis', [
@@ -100,6 +88,7 @@ class BertSentimentService
             'score' => null,
             'feedback' => 'Could not analyze sentiment.',
             'rating' => 3,
+            'result' => [],
         ];
     }
 }
