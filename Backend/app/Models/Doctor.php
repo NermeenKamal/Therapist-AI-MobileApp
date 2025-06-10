@@ -96,4 +96,10 @@ class Doctor extends Authenticatable
     {
         return $this->hasMany(Article::class);
     }
+
+    public function notifications()
+{
+    return $this->morphMany(Notification::class, 'notifiable');
+}
+
 }
