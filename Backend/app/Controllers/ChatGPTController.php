@@ -8,38 +8,27 @@ use Illuminate\Support\Facades\Log;
 
 class ChatGPTController extends Controller
 {
-    public function sendMessage(Request $req)
+    public function sendMessage(Request $request)
     {
-        $req->validate([
-            'conversation_id' => 'nullable|string',
-            'message' => 'required|string',
+        $userMessage = $request->input('message');
+
+        $response = Http::withToken(env('OPENAI_API_KEY'))->post('https://api.openai.com/v1/chat/completions', [
+            'model' => 'gpt-4o', // أو gpt-4o-mini لو محتاجة أخف وأسرع
+            'messages' => [
+                ['role' => 'user', 'content' => $userMessage]
+            ]
         ]);
-        Log::info('Send message payload', $req->all());
-        try {
-            $messages = [
-                ['role' => 'user', 'content' => $req->message],
-            ];
-            if ($req->conversation_id) {
-                // يمكنك جلب الرسائل السابقة من DB
-            }
-            $resp = OpenAI::chat()->create([
-                'model' => 'gpt-3.5-turbo',
-                'messages' => $messages,
-            ]);
-            Log::info('OpenAI response', (array)$resp);
-            $choice = $resp['choices'][0]['message'];
+
+        if ($response->failed()) {
             return response()->json([
-                'status' => 'success',
-                'data' => [
-                    'conversation_id' => $req->conversation_id,
-                    'assistant' => $choice,
-                ],
-                'debug' => ['openai' => $resp->toArray()],
-            ]);
-        } catch (\Exception $e) {
-            Log::error('OpenAI error', ['error' => $e->getMessage()]);
-            return response()->json(['status'=>'error','message'=>$e->getMessage()],500);
+                'error' => 'حدث خطأ أثناء الاتصال بـ OpenAI.',
+                'details' => $response->json()
+            ], 500);
         }
+
+        return response()->json([
+            'response' => $response->json()['choices'][0]['message']['content']
+        ]);
     }
 
     public function getMessages(Request $req)
