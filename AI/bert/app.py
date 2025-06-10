@@ -16,7 +16,7 @@ def root():
 @app.post("/predict")
 async def predict(request: Request):
     data = await request.json()
-    text = data.get("text", "")
+    text = data.get("inputs")
     if not text:
         return {"error": "Missing text"}
 
