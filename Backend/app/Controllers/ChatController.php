@@ -238,12 +238,12 @@ class ChatController extends Controller
                     'id' => $appointment->doctor->id,
                     'name' => $appointment->doctor->name,
                     'specialization' => $appointment->doctor->specialization,
-                    'image' => $appointment->doctor->image,
+                    'image' => $appointment->doctor->profile_image,
                 ]
                 : [
                     'id' => $appointment->patient->id,
                     'name' => $appointment->patient->name,
-                    'image' => $appointment->patient->image,
+                    'image' => $appointment->doctor->profile_image,
                 ];
 
             $recentChats[] = [
