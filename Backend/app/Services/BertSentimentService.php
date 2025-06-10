@@ -22,7 +22,7 @@ class BertSentimentService
 {
     try {
        $response = Http::post($this->bertEndpoint, [
-            'text' => $text,
+            'inputs' => $text,
         ]);
 
         
