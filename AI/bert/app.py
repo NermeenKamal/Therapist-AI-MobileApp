@@ -4,7 +4,7 @@ import os
 
 app = FastAPI()
 
-HF_API_URL = "https://api-inference.huggingface.co/models/prajjwal1/bert-tiny"
+HF_API_URL = "https://api-inference.huggingface.co/models/distilbert-base-uncased-finetuned-sst-2-english"
 HF_TOKEN = os.getenv("HF_TOKEN")
 
 # تجهيز الهيدر بالتوكن
