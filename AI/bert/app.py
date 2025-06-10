@@ -9,7 +9,12 @@ HF_TOKEN = os.getenv("HF_TOKEN")
 
 headers = {"Authorization": f"Bearer {HF_TOKEN}"}
 
-@app.get("/")
+@app.get("/debug")
+def debug():
+    return {
+        "hf_token_set": bool(HF_TOKEN),
+        "endpoint": HF_API_URL
+    }
 def root():
     return {"message": "Sentiment model is live 🎯"}
 
