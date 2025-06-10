@@ -55,8 +55,6 @@ Route::prefix('public')->group(function () {
 });
 
 
-    Route::post('analyze-chat', [SentimentAnalysisController::class, 'analyze']);
-
 // Protected Routes
 Route::middleware('auth:sanctum')->group(function () {
     // Auth Routes
@@ -99,6 +97,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // OCR, Sentiment, Reports
     Route::post('verify-doctor-id', [OcrVerificationController::class, 'verify']);
+    Route::post('analyze-chat', [SentimentAnalysisController::class, 'analyze']);
     Route::post('generate-report', [ReportGenerationController::class, 'generate']);
 
     // AI Chatbot
