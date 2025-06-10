@@ -27,7 +27,8 @@ class SentimentAnalysisController extends Controller
             $negative = $results->firstWhere('label', 'NEGATIVE')['score'] ?? 0;
 
             // Normalize to rating out of 5
-            $raw_rating = ($positive / ($positive + $negative)) * 5;
+            $total = $positive + $negative;
+            $raw_rating = $total > 0 ? ($positive / $total) * 5 : 2.5; // default neutral
             $rounded_rating = round($raw_rating * 2) / 2; // round to nearest 0.5
 
             // Choose feedback
