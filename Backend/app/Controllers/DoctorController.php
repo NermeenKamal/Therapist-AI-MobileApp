@@ -53,148 +53,146 @@ class DoctorController extends Controller
     /**
      * Update authenticated doctor's profile
      */
-    public function updateProfile(Request $request): JsonResponse
-    {
-        Log::info('Doctor Update Profile Request', [
-            'has_files' => $request->hasFile('profile_image'),
-            'all_files' => $request->allFiles(),
-            'all_inputs' => $request->all(),
+    
+      public function updateProfile(Request $request): JsonResponse
+{
+    Log::info('Doctor Update Profile Request', [
+        'has_files' => $request->hasFile('profile_image'),
+        'all_files' => $request->allFiles(),
+        'all_inputs' => $request->all(),
+    ]);
+
+    $doctor = Auth::user();
+
+    if (!$doctor || !$doctor instanceof Doctor) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Unauthorized access'
+        ], 401);
+    }
+
+    $updatedFields = [];
+    $validated = [];
+
+    try {
+        $request->validate([
+            'bio' => 'nullable|string|max:1000',
+            'session_price' => 'nullable|numeric|min:0',
+            'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:4096',
+            'clinic_address' => 'nullable|string|max:255',
         ]);
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Validation failed',
+            'errors' => $e->errors()
+        ], 422);
+    }
 
-        $doctor = Auth::user();
+    if ($request->has('bio')) {
+        $validated['bio'] = $request->input('bio');
+        $updatedFields[] = 'Bio';
+    }
 
-        if (!$doctor || !$doctor instanceof Doctor) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized access'
-            ], 401);
-        }
+    if ($request->has('session_price')) {
+        $validated['session_price'] = $request->input('session_price');
+        $updatedFields[] = 'Session Price';
+    }
 
-        $updatedFields = [];
-        $validated = [];
+    if ($request->has('clinic_address')) {
+        $validated['clinic_address'] = $request->input('clinic_address');
+        $updatedFields[] = 'Clinic Address';
+    }
 
-        // Validate input data
-        try {
-            $request->validate([
-                'bio' => 'nullable|string|max:1000',
-                'session_price' => 'nullable|numeric|min:0',
-                'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:4096',
-                'clinic_address' => 'nullable|string|max:255',
+    if ($request->hasFile('profile_image')) {
+        $profileImage = $request->file('profile_image');
+
+        if ($profileImage && $profileImage->isValid()) {
+            Log::info('Processing profile image', [
+                'mime' => $profileImage->getMimeType(),
+                'size' => $profileImage->getSize(),
+                'name' => $profileImage->getClientOriginalName()
             ]);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $e->errors()
-            ], 422);
-        }
 
-        // Process basic fields
-        if ($request->has('bio')) {
-            $validated['bio'] = $request->input('bio');
-            $updatedFields[] = 'Bio';
-        }
-
-        if ($request->has('session_price')) {
-            $validated['session_price'] = $request->input('session_price');
-            $updatedFields[] = 'Session Price';
-        }
-
-        if ($request->has('clinic_address')) {
-            $validated['clinic_address'] = $request->input('clinic_address');
-            $updatedFields[] = 'Clinic Address';
-        }
-
-        // Handle profile image upload
-        if ($request->hasFile('profile_image')) {
-            $profileImage = $request->file('profile_image');
-            
-            if ($profileImage && $profileImage->isValid()) {
-                Log::info('Processing profile image', [
-                    'mime' => $profileImage->getMimeType(),
-                    'size' => $profileImage->getSize(),
-                    'name' => $profileImage->getClientOriginalName()
-                ]);
-                
-                if (!$this->isCloudinaryConfigured()) {
-                    Log::error('Cloudinary not configured properly');
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Image upload service is not configured'
-                    ], 500);
-                }
-                
-                try {
-                    $cloudinary = $this->getCloudinary();
-                    $uploadResult = $cloudinary->uploadApi()->upload(
-                        $profileImage->getRealPath(),
-                        [
-                            'folder' => 'doctor_images',
-                            'resource_type' => 'image',
-                            'transformation' => [
-                                'width' => 500,
-                                'height' => 500,
-                                'crop' => 'fill'
-                            ]
-                        ]
-                    );
-                    
-                    if ($uploadResult && isset($uploadResult['secure_url'])) {
-                        $validated['profile_image'] = $uploadResult['secure_url'];
-                        $updatedFields[] = 'Profile Image';
-                        Log::info('Image uploaded successfully', ['url' => $uploadResult['secure_url']]);
-                    }
-                } catch (Exception $e) {
-                    Log::error('Cloudinary upload failed', ['error' => $e->getMessage()]);
-                    
-                    // Fallback to local storage
-                    try {
-                        $localPath = $profileImage->store('doctor_images', 'public');
-                        $validated['profile_image'] = asset('storage/' . $localPath);
-                        $updatedFields[] = 'Profile Image (Local)';
-                    } catch (Exception $localError) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'Failed to upload image'
-                        ], 500);
-                    }
-                }
-            } else {
+            if (!$this->isCloudinaryConfigured()) {
+                Log::error('Cloudinary not configured properly');
                 return response()->json([
                     'success' => false,
-                    'message' => 'Invalid image file'
-                ], 400);
-            }
-        }
-
-        // Update doctor profile
-        if (!empty($validated)) {
-            try {
-                $doctor->update($validated);
-                Log::info('Doctor profile updated', [
-                    'doctor_id' => $doctor->id,
-                    'updated_fields' => $updatedFields
-                ]);
-            } catch (Exception $e) {
-                Log::error('Failed to update doctor profile', ['error' => $e->getMessage()]);
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Failed to update profile'
+                    'message' => 'Image upload service is not configured'
                 ], 500);
             }
-        }
 
-        return response()->json([
-            'success' => true,
-            'message' => !empty($updatedFields) 
-                ? 'Profile updated: ' . implode(', ', $updatedFields)
-                : 'No changes were made',
-            'data' => [
-                'doctor' => $doctor->fresh(),
-                'updated_fields' => $updatedFields
-            ]
-        ]);
+            try {
+                $cloudinary = $this->getCloudinary();
+                $uploadResult = $cloudinary->uploadApi()->upload(
+                    $profileImage->getRealPath(),
+                    [
+                        'folder' => 'doctor_images',
+                        'resource_type' => 'image',
+                        'transformation' => [
+                            'width' => 500,
+                            'height' => 500,
+                            'crop' => 'fill'
+                        ]
+                    ]
+                );
+
+                if ($uploadResult && isset($uploadResult['secure_url'])) {
+                    $validated['profile_image'] = $uploadResult['secure_url'];
+                    $updatedFields[] = 'Profile Image';
+                    Log::info('Image uploaded successfully', ['url' => $uploadResult['secure_url']]);
+                }
+            } catch (Exception $e) {
+                Log::error('Cloudinary upload failed', ['error' => $e->getMessage()]);
+
+                try {
+                    $localPath = $profileImage->store('doctor_images', 'public');
+                    $validated['profile_image'] = asset('storage/' . $localPath);
+                    $updatedFields[] = 'Profile Image (Local)';
+                } catch (Exception $localError) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Failed to upload image'
+                    ], 500);
+                }
+            }
+        } else {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid image file'
+            ], 400);
+        }
     }
+
+    if (!empty($validated)) {
+        try {
+            $doctor->update($validated);
+            Log::info('Doctor profile updated', [
+                'doctor_id' => $doctor->id,
+                'updated_fields' => $updatedFields
+            ]);
+        } catch (Exception $e) {
+            Log::error('Failed to update doctor profile', ['error' => $e->getMessage()]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update profile'
+            ], 500);
+        }
+    }
+
+    return response()->json([
+        'success' => true,
+        'message' => !empty($updatedFields)
+            ? 'Profile updated: ' . implode(', ', $updatedFields)
+            : 'No changes were made',
+        'bio' => $doctor->bio,
+        'session_price' => $doctor->session_price,
+        'clinic_address' => $doctor->clinic_address,
+        'profile_image' => $doctor->profile_image
+    ]);
+}
+
+      
 
     /**
      * Get all doctors with optional specialty filter
