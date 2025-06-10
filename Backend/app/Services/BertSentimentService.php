@@ -24,6 +24,9 @@ class BertSentimentService
         $response = Http::post($this->bertEndpoint, [
             'text' => $text,
         ]);
+        
+        \Log::info('Raw BERT API response:', ['body' => $response->body()]);
+
 
         if ($response->failed()) {
             \Log::error('BERT API request failed', [
