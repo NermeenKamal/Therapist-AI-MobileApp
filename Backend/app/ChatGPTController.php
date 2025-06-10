@@ -1,0 +1,80 @@
+<?php
+
+namespace App\Controllers;
+
+use Illuminate\Http\Request;
+use OpenAI\Laravel\Facades\OpenAI;
+use Illuminate\Support\Facades\Log;
+
+class ChatGPTController extends Controller
+{
+    public function sendMessage(Request $req)
+    {
+        $req->validate([
+            'conversation_id' => 'nullable|string',
+            'message' => 'required|string',
+        ]);
+        Log::info('Send message payload', $req->all());
+        try {
+            $messages = [
+                ['role' => 'user', 'content' => $req->message],
+            ];
+            if ($req->conversation_id) {
+                // يمكنك جلب الرسائل السابقة من DB
+            }
+            $resp = OpenAI::chat()->create([
+                'model' => 'gpt-3.5-turbo',
+                'messages' => $messages,
+            ]);
+            Log::info('OpenAI response', (array)$resp);
+            $choice = $resp['choices'][0]['message'];
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'conversation_id' => $req->conversation_id,
+                    'assistant' => $choice,
+                ],
+                'debug' => ['openai' => $resp->toArray()],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('OpenAI error', ['error' => $e->getMessage()]);
+            return response()->json(['status'=>'error','message'=>$e->getMessage()],500);
+        }
+    }
+
+    public function getMessages(Request $req)
+    {
+        $req->validate(['conversation_id'=>'required|string']);
+        Log::info('Get messages conversation', ['cid'=>$req->conversation_id]);
+        // مثال: بدل ما ترجع من DB نفترض مبسطاً:
+        return response()->json([
+            'status'=>'success',
+            'data'=> [
+                ['role'=>'user','content'=>'مرحبا ؟'],
+                ['role'=>'assistant','content'=>'أهلاً، كيف يمكنني مساعدتك؟'],
+            ]
+        ]);
+    }
+
+    public function generateReport(Request $req)
+    {
+        $req->validate(['conversation'=>'required|array']);
+        Log::info('Generate report payload', $req->conversation);
+        try {
+            $prompt = "Generate a summary report based on this conversation:\n";
+            foreach ($req->conversation as $msg) {
+                $prompt .= strtoupper($msg['role']).": ".$msg['content']."\n";
+            }
+            $resp = OpenAI::chat()->create([
+                'model'=>'gpt-3.5-turbo',
+                'messages'=>[['role'=>'system','content'=>$prompt]],
+            ]);
+            $report = $resp['choices'][0]['message']['content'];
+            Log::info('Generated report', ['report'=>$report]);
+            return response()->json(['status'=>'success','report'=>$report]);
+        } catch (\Exception $e) {
+            Log::error('Report error', ['error'=>$e->getMessage()]);
+            return response()->json(['status'=>'error','message'=>$e->getMessage()],500);
+        }
+    }
+}
