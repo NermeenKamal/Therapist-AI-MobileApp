@@ -9,8 +9,11 @@ class Notification extends Model
 {
     protected $fillable = ['notifiable_type', 'notifiable_id', 'title', 'message', 'is_read'];
 
+    protected $hidden = ['notifiable_type']; 
+
     public function notifiable(): MorphTo
     {
         return $this->morphTo();
     }
 }
+
