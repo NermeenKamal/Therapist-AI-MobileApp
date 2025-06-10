@@ -14,7 +14,7 @@ class ChatGPTController extends Controller
         $userMessage = $request->input('message');
 
         $response = Http::withToken(env('OPENAI_API_KEY'))->post('https://api.openai.com/v1/chat/completions', [
-            'model' => 'gpt-4o',
+            'model' => 'gpt-3.5-turbo',
             'messages' => [
                 ['role' => 'user', 'content' => $userMessage]
             ]
