@@ -70,21 +70,50 @@
 
 
 
-
-
-
 from fastapi import FastAPI, Request
 import os
 from huggingface_hub import InferenceClient
 
 app = FastAPI()
 
+HF_MODEL_ID = "distilbert/distilbert-base-uncased-finetuned-sst-2-english"
 HF_TOKEN = os.getenv("HF_TOKEN")
 
 client = InferenceClient(
-    model="distilbert/distilbert-base-uncased-finetuned-sst-2-english",
+    model=HF_MODEL_ID,
     token=HF_TOKEN,
 )
+
+@app.get("/health")
+def health_check():
+    return {
+        "status": "ok",
+        "service": "bert",
+        "huggingface_model": HF_MODEL_ID,
+        "token_set": bool(HF_TOKEN)
+    }
+
+@app.get("/test-model")
+def test_model():
+    try:
+        result = client.text_classification("You are a great doctor!")
+        return {"result": result}
+    except Exception as e:
+        return {
+            "error": "Failed to use InferenceClient",
+            "detail": str(e)
+        }
+
+@app.get("/debug")
+def debug():
+    return {
+        "hf_token_set": bool(HF_TOKEN),
+        "model_id": HF_MODEL_ID
+    }
+
+@app.get("/")
+def root():
+    return {"message": "Sentiment model is live 🎯"}
 
 @app.post("/predict")
 async def predict(request: Request):
@@ -92,14 +121,16 @@ async def predict(request: Request):
     text = data.get("inputs")
 
     if not text:
-        return {"error": "Missing input text"}
+        return {"error": "Missing text"}
 
-    result = client.text_classification(text)
-    return {"result": result}
-
-
-
-
+    try:
+        result = client.text_classification(text)
+        return {"result": result}
+    except Exception as e:
+        return {
+            "error": "Failed to get prediction",
+            "detail": str(e)
+        }
 
 
 
