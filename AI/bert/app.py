@@ -11,13 +11,13 @@ headers = {"Authorization": f"Bearer {HF_TOKEN}"}
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "service": "bert", "huggingface_model": HF_MODEL}
+    return {"status": "ok", "service": "bert", "huggingface_model": HF_API_URL}
 
 
 @app.get("/test-model")
 def test_model():
     headers = {"Authorization": f"Bearer {HF_TOKEN}"}
-    hf_url = f"https://api-inference.huggingface.co/models/{HF_MODEL}"
+    hf_url = HF_API_URL
     
     sample_input = {"inputs": "You are a great doctor!"}
     
