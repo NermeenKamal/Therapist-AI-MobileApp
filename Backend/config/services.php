@@ -2,8 +2,11 @@
 
 return [
 
-    // ... other service configs ...
 
+    'openai' => [
+          'key' => env('OPENAI_API_KEY'),
+    ],
+    
     'fcm' => [
         'server_key' => env('FCM_SERVER_KEY'),
     ],
