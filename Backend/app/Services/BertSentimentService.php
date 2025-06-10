@@ -21,13 +21,19 @@ class BertSentimentService
    public function analyze(string $text): array
 {
     try {
-        $response = Http::withToken(env('HF_TOKEN'))
-        ->post($this->bertEndpoint, [
-            'inputs' => $text,
-        ]);
-
+       $response = Http::withToken(config('services.bert.token')) // Use config, not env
+            ->post($this->bertEndpoint, [
+                'text' => $text, // or 'inputs' => $text, depending on FastAPI
+            ]);
         
-        \Log::info('Raw BERT API response:', ['body' => $response->body()]);
+        \Log::info('BERT Response Status', ['status' => $response->status()]);
+        \Log::info('BERT Raw Body', ['body' => $response->body()]);
+        
+        dd([
+            'status' => $response->status(),
+            'body' => $response->body(),
+            'json' => $response->json(),
+        ]);
 
 
         if ($response->failed()) {
