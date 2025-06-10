@@ -73,4 +73,10 @@ class Patient extends Authenticatable
     {
         return $this->hasMany(ChatMessage::class, 'receiver_id')->where('receiver_type', 'patient');
     }
+
+    public function notifications()
+{
+    return $this->morphMany(Notification::class, 'notifiable');
+}
+
 }
