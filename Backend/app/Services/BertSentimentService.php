@@ -14,11 +14,6 @@ class BertSentimentService
         $this->bertEndpoint = config('services.bert.endpoint');
         $this->token = config('services.bert.token');
 
-        \Log::info('Initializing BertSentimentService', [
-            'endpoint' => $this->bertEndpoint,
-            'token_present' => !empty($this->token)
-        ]);
-
         if (empty($this->bertEndpoint)) {
             throw new \RuntimeException('BERT API endpoint is not configured properly.');
         }
@@ -29,86 +24,74 @@ class BertSentimentService
     }
 
     public function analyze(string $text): array
-{
-    try {
-        $headers = [];
+    {
+        try {
+            $headers = [];
+            if (!empty($this->token)) {
+                $headers['Authorization'] = 'Bearer ' . $this->token;
+            }
 
-        if (!empty($this->token)) {
-            $headers['Authorization'] = 'Bearer ' . $this->token;
-        }
-
-        $response = Http::withHeaders($headers)->post($this->bertEndpoint, [
-            'inputs' => $text,
-        ]);
-
-        \Log::info('BERT Response Status', ['status' => $response->status()]);
-        \Log::info('BERT Raw Body', ['body' => $response->body()]);
-
-        if ($response->failed()) {
-            \Log::error('BERT API request failed', [
-                'status' => $response->status(),
-                'body' => $response->body(),
+            $response = Http::withHeaders($headers)->post($this->bertEndpoint, [
+                'inputs' => $text,
             ]);
 
+            \Log::info('BERT API Response Status', ['status' => $response->status()]);
+            \Log::info('BERT API Raw Response', ['body' => $response->body()]);
+
+            if ($response->failed()) {
+                \Log::error('BERT API request failed', [
+                    'status' => $response->status(),
+                    'body'   => $response->body(),
+                ]);
+                return $this->defaultResult();
+            }
+
+            $data = $response->json();
+
+            if (!isset($data['result']) || !is_array($data['result'])) {
+                throw new \Exception('Invalid BERT response format');
+            }
+
+            $results = collect($data['result']);
+            $positive = $results->firstWhere('label', 'POSITIVE')['score'] ?? 0;
+            $negative = $results->firstWhere('label', 'NEGATIVE')['score'] ?? 0;
+            $total = $positive + $negative;
+
+            $rawRating = $total > 0 ? ($positive / $total) * 5 : 2.5;
+            $roundedRating = round($rawRating * 2) / 2;
+
+            $label = $positive === $negative ? 'neutral' : ($positive > $negative ? 'positive' : 'negative');
+            $score = max($positive, $negative);
+
+            $feedback = match ($label) {
+                'positive' => 'The doctor\'s response was professional and supportive.',
+                'negative' => 'The doctor\'s response may be inappropriate or unhelpful.',
+                default    => 'The tone of the message is neutral.',
+            };
+
+            return [
+                'label'      => $label,
+                'score'      => $score,
+                'feedback'   => $feedback,
+                'rating'     => $roundedRating,
+                'raw_result' => $data['result'], // ⬅️ مهم جدًا!
+            ];
+        } catch (\Exception $e) {
+            \Log::error('Exception during sentiment analysis', [
+                'error' => $e->getMessage(),
+            ]);
             return $this->defaultResult();
         }
-
-        $data = $response->json();
-        
-        if (!isset($data['result']) || !is_array($data['result']) || count($data['result']) === 0) {
-            \Log::error('Unexpected BERT response structure', ['response' => $data]);
-            return $this->defaultResult();
-        }
-        
-        $results = collect($data['result']);
-
-        if (!is_array($data) || !isset($data[0]['label'])) {
-            throw new \Exception('Invalid BERT response format');
-        }
-
-        $results = collect($data);
-        $positive = $results->firstWhere('label', 'POSITIVE')['score'] ?? 0;
-        $negative = $results->firstWhere('label', 'NEGATIVE')['score'] ?? 0;
-
-        $total = $positive + $negative;
-        $rawRating = $total > 0 ? ($positive / $total) * 5 : 2.5;
-        $roundedRating = round($rawRating * 2) / 2;
-
-        $label = $positive > $negative ? 'positive' : 'negative';
-        $score = max($positive, $negative);
-
-        $feedback = match ($label) {
-            'positive' => 'The doctor\'s response was professional and supportive.',
-            'negative' => 'The doctor\'s response may be inappropriate or unhelpful.',
-            default => 'The tone of the message is neutral.',
-        };
-
-        return [
-            'label' => $label,
-            'score' => $score,
-            'feedback' => $feedback,
-            'rating' => $roundedRating,
-            'raw_result' => $data['result'], // <<< مهم جدًا عشان الـ controller يلاقيه
-        ];
-
-    } catch (\Exception $e) {
-        \Log::error('Exception during sentiment analysis', [
-            'error' => $e->getMessage(),
-        ]);
-
-        return $this->defaultResult();
     }
-}
 
-
-    protected function defaultResult(string $reason = 'Unknown error'): array
+    protected function defaultResult(): array
     {
         return [
-            'label' => 'neutral',
-            'score' => null,
-            'feedback' => 'Could not analyze sentiment.',
-            'rating' => 3,
-            'raw_result' => ['error_reason' => $reason]
+            'label'      => 'neutral',
+            'score'      => null,
+            'feedback'   => 'Could not analyze sentiment.',
+            'rating'     => 3,
+            'raw_result' => [],
         ];
     }
 }
