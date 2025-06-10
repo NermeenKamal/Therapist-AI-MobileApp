@@ -21,14 +21,19 @@ async def predict(request: Request):
         return {"error": "Missing text"}
 
     response = requests.post(HF_API_URL, headers=headers, json={"inputs": text})
-    print("Raw response from HF:", response.status_code, response.text)
+
+    # DEBUGGING:
+    print("🔍 STATUS:", response.status_code)
+    print("🔍 TEXT:", response.text)
 
     try:
         result = response.json()
     except Exception as e:
         return {
             "error": "Failed to parse Hugging Face response",
-            "detail": str(e)
+            "detail": str(e),
+            "status_code": response.status_code,
+            "raw": response.text
         }
 
     return result
