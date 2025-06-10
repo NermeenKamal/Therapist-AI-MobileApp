@@ -18,14 +18,30 @@ def health_check():
 def test_model():
     headers = {"Authorization": f"Bearer {HF_TOKEN}"}
     hf_url = HF_API_URL
-    
+
     sample_input = {"inputs": "You are a great doctor!"}
-    
+
     try:
         response = requests.post(hf_url, headers=headers, json=sample_input)
-        return response.json()
+
+        # نطبع الحالة والنص الكامل
+        print("🔍 STATUS:", response.status_code)
+        print("🔍 TEXT:", response.text)
+
+        # نجرب نرجع كل البيانات الخام
+        return {
+            "status_code": response.status_code,
+            "text": response.text,
+            "json": response.json() if response.headers.get('Content-Type') == 'application/json' else None
+        }
+
     except Exception as e:
-        return {"error": str(e)}
+        return {
+            "error": "Failed to parse Hugging Face response",
+            "detail": str(e),
+            "status_code": response.status_code,
+            "raw": response.text
+        }
 
 
 @app.get("/debug")
