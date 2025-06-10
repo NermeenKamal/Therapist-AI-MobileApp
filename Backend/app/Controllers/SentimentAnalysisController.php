@@ -22,31 +22,24 @@ class SentimentAnalysisController extends Controller
             $bert = new BertSentimentService();
             $response = $bert->analyze($validated['message']);
 
-            // Extract processed sentiment values
-            $rating   = $response['rating'];
-            $label    = $response['label'];
-            $score    = $response['score'];
-            $feedback = $response['feedback'];
-
-            // Save to DB
             $chatRating = ChatRating::create([
                 'appointment_id'   => $validated['appointment_id'],
                 'patient_id'       => $validated['patient_id'],
-                'rating'           => $rating,
-                'feedback'         => $feedback,
-                'sentiment_score'  => $score,
-                'sentiment_label'  => $label,
+                'rating'           => $response['rating'],
+                'feedback'         => $response['feedback'],
+                'sentiment_score'  => $response['score'],
+                'sentiment_label'  => $response['label'],
             ]);
 
             return response()->json([
                 'status' => 'success',
-                'data'   => $chatRating
+                'data' => $chatRating
             ]);
         } catch (\Exception $e) {
             return response()->json([
-                'status'  => 'error',
+                'status' => 'error',
                 'message' => 'Failed to analyze sentiment',
-                'detail'  => $e->getMessage(),
+                'detail' => $e->getMessage(),
             ], 500);
         }
     }
