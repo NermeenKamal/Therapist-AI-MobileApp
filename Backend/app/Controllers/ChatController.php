@@ -196,53 +196,71 @@ class ChatController extends Controller
         return response()->json(['success' => true]);
     }
 
-    public function getRecentChats(): JsonResponse
-    {
-        $user = Auth::user();
-        $userType = $user instanceof Patient ? 'patient' : ($user instanceof Doctor ? 'doctor' : null);
-        $userId = $user->id;
+   public function getRecentChats(): JsonResponse
+{
+    $user = Auth::user();
+    $userType = $user instanceof Patient ? 'patient' : ($user instanceof Doctor ? 'doctor' : null);
+    $userId = $user->id;
 
-        if (!$userType) {
-            return response()->json(['message' => 'نوع المستخدم غير محدد'], 400);
-        }
-
-        $appointmentIds = Appointment::where($userType . '_id', $userId)
-            ->pluck('id')
-            ->toArray();
-
-        $appointmentIdsWithMessages = ChatMessage::whereIn('appointment_id', $appointmentIds)
-            ->pluck('appointment_id')
-            ->unique()
-            ->toArray();
-
-        $recentChats = [];
-        foreach ($appointmentIdsWithMessages as $appointmentId) {
-            $latestMessage = ChatMessage::where('appointment_id', $appointmentId)
-                ->latest('created_at')
-                ->first();
-
-            if ($latestMessage) {
-                $unreadCount = ChatMessage::where('appointment_id', $appointmentId)
-                    ->where('sender_type', '!=', $userType)
-                    ->where('is_read', false)
-                    ->count();
-
-                $appointment = Appointment::with(['doctor', 'patient'])
-                    ->find($appointmentId);
-
-                $recentChats[] = [
-                    'appointment_id' => $appointmentId,
-                    'appointment' => $appointment,
-                    'latest_message' => $latestMessage,
-                    'unread_count' => $unreadCount,
-                ];
-            }
-        }
-
-        usort($recentChats, function ($a, $b) {
-            return strtotime($b['latest_message']['created_at']) - strtotime($a['latest_message']['created_at']);
-        });
-
-        return response()->json($recentChats);
+    if (!$userType) {
+        return response()->json(['message' => 'نوع المستخدم غير محدد'], 400);
     }
+
+    // الحصول على كل مواعيد المستخدم (دكتور أو مريض)
+    $appointmentIds = Appointment::where($userType . '_id', $userId)
+        ->pluck('id')
+        ->toArray();
+
+    // المواعيد اللي فيها رسائل فقط
+    $appointmentIdsWithMessages = ChatMessage::whereIn('appointment_id', $appointmentIds)
+        ->pluck('appointment_id')
+        ->unique()
+        ->toArray();
+
+    $recentChats = [];
+
+    foreach ($appointmentIdsWithMessages as $appointmentId) {
+        $latestMessage = ChatMessage::where('appointment_id', $appointmentId)
+            ->latest('created_at')
+            ->first();
+
+        if ($latestMessage) {
+            $unreadCount = ChatMessage::where('appointment_id', $appointmentId)
+                ->where('sender_type', '!=', $userType)
+                ->where('is_read', false)
+                ->count();
+
+            $appointment = Appointment::with(['doctor', 'patient'])->find($appointmentId);
+
+            // تجهيز الطرف الآخر حسب نوع المستخدم
+            $otherParty = $userType === 'patient'
+                ? [
+                    'id' => $appointment->doctor->id,
+                    'name' => $appointment->doctor->name,
+                    'specialization' => $appointment->doctor->specialization,
+                    'image' => $appointment->doctor->image,
+                ]
+                : [
+                    'id' => $appointment->patient->id,
+                    'name' => $appointment->patient->name,
+                    'image' => $appointment->patient->image,
+                ];
+
+            $recentChats[] = [
+                'appointment_id' => $appointmentId,
+                'latest_message' => $latestMessage,
+                'unread_count' => $unreadCount,
+                $userType === 'patient' ? 'doctor' : 'patient' => $otherParty,
+            ];
+        }
+    }
+
+    // ترتيب المحادثات حسب أحدث رسالة
+    usort($recentChats, function ($a, $b) {
+        return strtotime($b['latest_message']['created_at']) - strtotime($a['latest_message']['created_at']);
+    });
+
+    return response()->json($recentChats);
+}
+
 }
