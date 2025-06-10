@@ -245,7 +245,7 @@ class ChatController extends Controller
             'user' => [
                 'id' => $otherParty->id,
                 'name' => $otherParty->name,
-                'image' => $otherParty->image,
+                'image' => $appointment->doctor->profile_image,
                 'specialization' => $otherParty instanceof Doctor ? $otherParty->specialization : null,
             ],
             'latest_message' => $latestMessage,
