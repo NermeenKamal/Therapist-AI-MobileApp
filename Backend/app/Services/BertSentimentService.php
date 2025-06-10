@@ -29,68 +29,70 @@ class BertSentimentService
     }
 
     public function analyze(string $text): array
-    {
-        try {
-            \Log::info('Sending request to BERT API', ['text' => $text]);
+{
+    try {
+        $headers = [];
 
-            $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $this->token,
-            ])->post($this->bertEndpoint, [
-                'inputs' => $text,
-            ]);
-
-            \Log::info('BERT API Response', [
-                'status' => $response->status(),
-                'body' => $response->body()
-            ]);
-
-            if ($response->failed()) {
-                \Log::error('BERT API request failed', [
-                    'status' => $response->status(),
-                    'body' => $response->body(),
-                ]);
-                return $this->defaultResult('API request failed');
-            }
-
-            $data = $response->json();
-
-            if (!is_array($data) || !isset($data[0]['label'])) {
-                \Log::warning('Unexpected BERT response format', ['data' => $data]);
-                return $this->defaultResult('Unexpected response format');
-            }
-
-            $results = collect($data);
-            $positive = $results->firstWhere('label', 'POSITIVE')['score'] ?? 0;
-            $negative = $results->firstWhere('label', 'NEGATIVE')['score'] ?? 0;
-
-            $total = $positive + $negative;
-            $rawRating = $total > 0 ? ($positive / $total) * 5 : 2.5;
-            $roundedRating = round($rawRating * 2) / 2;
-
-            $label = $positive > $negative ? 'positive' : 'negative';
-            $score = max($positive, $negative);
-
-            $feedback = match ($label) {
-                'positive' => 'The doctor\'s response was professional and supportive.',
-                'negative' => 'The doctor\'s response may be inappropriate or unhelpful.',
-                default    => 'The tone of the message is neutral.',
-            };
-
-            return [
-                'label' => $label,
-                'score' => $score,
-                'feedback' => $feedback,
-                'rating' => $roundedRating,
-                'raw_result' => $data,
-            ];
-        } catch (\Exception $e) {
-            \Log::error('Exception during sentiment analysis', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-            return $this->defaultResult($e->getMessage());
+        if (!empty($this->token)) {
+            $headers['Authorization'] = 'Bearer ' . $this->token;
         }
+
+        $response = Http::withHeaders($headers)->post($this->bertEndpoint, [
+            'inputs' => $text,
+        ]);
+
+        \Log::info('BERT Response Status', ['status' => $response->status()]);
+        \Log::info('BERT Raw Body', ['body' => $response->body()]);
+
+        if ($response->failed()) {
+            \Log::error('BERT API request failed', [
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+
+            return $this->defaultResult();
+        }
+
+        $data = $response->json();
+
+        if (!is_array($data) || !isset($data[0]['label'])) {
+            throw new \Exception('Invalid BERT response format');
+        }
+
+        $results = collect($data);
+        $positive = $results->firstWhere('label', 'POSITIVE')['score'] ?? 0;
+        $negative = $results->firstWhere('label', 'NEGATIVE')['score'] ?? 0;
+
+        $total = $positive + $negative;
+        $rawRating = $total > 0 ? ($positive / $total) * 5 : 2.5;
+        $roundedRating = round($rawRating * 2) / 2;
+
+        $label = $positive > $negative ? 'positive' : 'negative';
+        $score = max($positive, $negative);
+
+        $feedback = match ($label) {
+            'positive' => 'The doctor\'s response was professional and supportive.',
+            'negative' => 'The doctor\'s response may be inappropriate or unhelpful.',
+            default => 'The tone of the message is neutral.',
+        };
+
+        return [
+            'label' => $label,
+            'score' => $score,
+            'feedback' => $feedback,
+            'rating' => $roundedRating,
+            'result' => $data, // إضافة استجابة BERT الأصلية لسهولة الديباج
+        ];
+
+    } catch (\Exception $e) {
+        \Log::error('Exception during sentiment analysis', [
+            'error' => $e->getMessage(),
+        ]);
+
+        return $this->defaultResult();
     }
+}
+
 
     protected function defaultResult(string $reason = 'Unknown error'): array
     {
