@@ -22,9 +22,23 @@ async def predict(request: Request):
         return {"error": "Missing text"}
     
     response = requests.post(HF_API_URL, headers=headers, json={"inputs": text})
+
     try:
         result = response.json()
-    except:
-        return {"error": "Failed to parse Hugging Face response"}
-    
-    return result
+        if isinstance(result, list) and len(result) > 0:
+            sentiment = result[0]
+            feedback = None
+            if sentiment['label'] == "POSITIVE":
+                feedback = "Great! Keep it up."
+            elif sentiment['label'] == "NEGATIVE":
+                feedback = "Sorry to hear that. We're here to help."
+
+            return {
+                "label": sentiment["label"],
+                "score": sentiment["score"],
+                "feedback": feedback
+            }
+        else:
+            return {"error": "Unexpected response format", "raw": result}
+    except Exception as e:
+        return {"error": "Failed to parse Hugging Face response", "detail": str(e)}
