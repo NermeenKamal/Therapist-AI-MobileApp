@@ -88,7 +88,7 @@ class BertSentimentService
             'score' => $score,
             'feedback' => $feedback,
             'rating' => $roundedRating,
-            'result' => $data, // إضافة استجابة BERT الأصلية لسهولة الديباج
+            'raw_result' => $data['result'], // <<< مهم جدًا عشان الـ controller يلاقيه
         ];
 
     } catch (\Exception $e) {
