@@ -94,7 +94,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('notifications', [NotificationController::class, 'index']);
     Route::post('notifications/{id}/read', [NotificationController::class, 'markRead']);
     Route::post('notifications/broadcast', [BroadcastNotificationController::class, 'broadcast']);
-    Route::post('/notifications/send', [NotificationController::class, 'sendNotification']);
+    Route::post('notifications/send', [NotificationController::class, 'sendNotification']);
 
     // OCR, Sentiment, Reports
     Route::post('verify-doctor-id', [OcrVerificationController::class, 'verify']);
