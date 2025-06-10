@@ -15,21 +15,35 @@ class SentimentAnalysisController extends Controller
             'user_id' => 'required|integer',
             'appointment_id' => 'required|integer',
             'message' => 'required|string',
-            'patient_id' => 'required|integer', // Ensure it's passed
+            'patient_id' => 'required|integer',
         ]);
 
         try {
             $bert = new BertSentimentService();
-            $result = $bert->analyze($validated['message']);
+            $response = $bert->analyze($validated['message']); // expect `result` array
 
-            // Save into chat_ratings table
+            $results = collect($response['result']);
+            $positive = $results->firstWhere('label', 'POSITIVE')['score'] ?? 0;
+            $negative = $results->firstWhere('label', 'NEGATIVE')['score'] ?? 0;
+
+            // Normalize to rating out of 5
+            $raw_rating = ($positive / ($positive + $negative)) * 5;
+            $rounded_rating = round($raw_rating * 2) / 2; // round to nearest 0.5
+
+            // Choose feedback
+            $label = $positive > $negative ? 'positive' : 'negative';
+            $feedback = $label === 'positive'
+                ? 'User had a positive experience.'
+                : 'User had a negative experience.';
+
+            // Save to DB
             $chatRating = ChatRating::create([
                 'appointment_id'    => $validated['appointment_id'],
                 'patient_id'        => $validated['patient_id'],
-                'rating'            => $result['label'] === 'positive' ? 5 : ($result['label'] === 'negative' ? 1 : 3),
-                'feedback'          => $result['feedback'],
-                'sentiment_score'   => $result['score'],
-                'sentiment_label'   => $result['label'],
+                'rating'            => $rounded_rating,
+                'feedback'          => $feedback,
+                'sentiment_score'   => max($positive, $negative),
+                'sentiment_label'   => $label,
             ]);
 
             return response()->json([
