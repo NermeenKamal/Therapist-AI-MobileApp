@@ -21,9 +21,11 @@ class BertSentimentService
    public function analyze(string $text): array
 {
     try {
-        $response = Http::post($this->bertEndpoint, [
-            'text' => $text,
+        $response = Http::withToken(env('HF_TOKEN'))
+        ->post($this->bertEndpoint, [
+            'inputs' => $text,
         ]);
+
         
         \Log::info('Raw BERT API response:', ['body' => $response->body()]);
 
