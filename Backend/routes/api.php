@@ -11,12 +11,17 @@ use App\Controllers\OcrController;
 use App\Controllers\SentimentAnalysisController;
 use App\Controllers\ReportGenerationController;
 use App\Controllers\ForgotPasswordController;
-use App\Controllers\AIChatbotController;
+use App\Controllers\ChatGPTController;
 use App\Controllers\DoctorScheduleController;
 use App\Controllers\DoctorController;
 use App\Controllers\ArticleController;
 use App\Controllers\FCMController;
 use App\Controllers\PatientController;
+
+
+Route::post('chat/send-message', [ChatGPTController::class,'sendMessage']);
+Route::post('chat/get-messages', [ChatGPTController::class,'getMessages']);
+Route::post('chat/generate-report', [ChatGPTController::class,'generateReport']);
 
 // Health check endpoint
 Route::get('/health', function () {
