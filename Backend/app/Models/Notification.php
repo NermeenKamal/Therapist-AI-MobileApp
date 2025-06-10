@@ -3,18 +3,14 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 class Notification extends Model
 {
-    protected $fillable = [
-        'user_id',
-        'title',
-        'body',
-        'is_read',
-    ];
+    protected $fillable = ['notifiable_type', 'notifiable_id', 'title', 'message', 'is_read'];
 
-    public function user()
+    public function notifiable(): MorphTo
     {
-        return $this->belongsTo(User::class);
+        return $this->morphTo();
     }
 }
