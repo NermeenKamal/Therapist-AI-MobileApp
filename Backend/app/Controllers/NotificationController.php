@@ -31,7 +31,7 @@ class NotificationController extends Controller
         $this->fcm->sendToUser(
             $request->user()->fcm_token,
             'Notification Read',
-            'تم قراءة الإشعار بنجاح',
+            'Notification Has Been Read',
             ['notification_id' => $notification->id]
         );
 
