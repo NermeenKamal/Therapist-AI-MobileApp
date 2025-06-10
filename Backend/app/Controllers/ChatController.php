@@ -24,12 +24,8 @@ class ChatController extends Controller
         $this->bert = $bert;
     }
 
-    /**
-     * إرسال رسالة في الدردشة
-     */
     public function sendMessage(Request $request): JsonResponse
     {
-        $debugLogs = [];
         $user = Auth::user();
 
         if (!$user) {
@@ -78,30 +74,28 @@ class ChatController extends Controller
 
         $rating = null;
         if ($senderType === 'doctor') {
-    try {
-        $bertResult = $this->bert->analyze($data['message']);
+            try {
+                $bertResult = $this->bert->analyze($data['message']);
 
-        // توليد قيمة rating رقمية من التحليل
-        $ratingValue = match (strtolower($bertResult['label'])) {
-            'positive' => 5,
-            'neutral'  => 3,
-            'negative' => 1,
-            default    => 2,
-        };
+                $ratingValue = match (strtolower($bertResult['label'])) {
+                    'positive' => 5,
+                    'neutral'  => 3,
+                    'negative' => 1,
+                    default    => 2,
+                };
 
-        $rating = ChatRating::create([
-            'appointment_id'   => $data['appointment_id'],
-            'patient_id'       => $receiverId,
-            'rating'           => $ratingValue,
-            'feedback'         => $bertResult['feedback'],
-            'sentiment_score'  => $bertResult['score'],
-            'sentiment_label'  => $bertResult['label'],
-        ]);
-    } catch (\Exception $e) {
-        \Log::error('BERT error: ' . $e->getMessage());
-    }
-}
-
+                $rating = ChatRating::create([
+                    'appointment_id'   => $data['appointment_id'],
+                    'patient_id'       => $receiverId,
+                    'rating'           => $ratingValue,
+                    'feedback'         => $bertResult['feedback'],
+                    'sentiment_score'  => $bertResult['score'],
+                    'sentiment_label'  => $bertResult['label'],
+                ]);
+            } catch (\Exception $e) {
+                \Log::error('BERT error: ' . $e->getMessage());
+            }
+        }
 
         try {
             $firebaseMessage = [
@@ -117,7 +111,7 @@ class ChatController extends Controller
 
             $client->post($firebasePath, ['json' => $firebaseMessage]);
         } catch (\Exception $e) {
-            // يمكن تسجيل الخطأ هنا إذا لزم
+            // Log firebase error if needed
         }
 
         if ($receiver && $receiver->fcm_token) {
@@ -134,25 +128,21 @@ class ChatController extends Controller
                     ]
                 );
             } catch (\Exception $e) {
-                // يمكن تسجيل الخطأ هنا إذا لزم
+                // Log FCM error if needed
             }
         }
 
         $response = $chat->toArray();
         if ($rating) {
-    $response['sentiment_score'] = $rating->sentiment_score;
-    $response['sentiment_label'] = $rating->sentiment_label;
-    $response['feedback'] = $rating->feedback;
-    $response['rating'] = $rating->rating;
-}
-
+            $response['sentiment_score'] = $rating->sentiment_score;
+            $response['sentiment_label'] = $rating->sentiment_label;
+            $response['feedback'] = $rating->feedback;
+            $response['rating'] = $rating->rating;
+        }
 
         return response()->json(['data' => $response], 201);
     }
 
-    /**
-     * الحصول على الرسائل لموعد محدد
-     */
     public function getMessages(int $appointmentId): JsonResponse
     {
         $user = Auth::user();
@@ -181,9 +171,6 @@ class ChatController extends Controller
         return response()->json($messages);
     }
 
-    /**
-     * تحديد الرسائل كمقروءة
-     */
     public function markAsRead(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -209,9 +196,6 @@ class ChatController extends Controller
         return response()->json(['success' => true]);
     }
 
-    /**
-     * الحصول على المحادثات الحديثة للمستخدم الحالي
-     */
     public function getRecentChats(): JsonResponse
     {
         $user = Auth::user();
