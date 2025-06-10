@@ -26,9 +26,9 @@ class SentimentAnalysisController extends Controller
 
             \Log::info('Parsed BERT result', $bertResponse);
 
-            $label = $bertResponse['label'];
-            $score = $bertResponse['score'];
-            $rating = $bertResponse['rating'];
+            $label    = $bertResponse['label'];
+            $score    = $bertResponse['score'];
+            $rating   = $bertResponse['rating'];
             $feedback = $bertResponse['feedback'];
             $rawResult = $bertResponse['raw_result'];
 
@@ -45,11 +45,13 @@ class SentimentAnalysisController extends Controller
 
             return response()->json([
                 'status' => 'success',
-                'data' => $chatRating,
-                'debug' => [
-                    'bert_raw_result' => $rawResult,
-                    'positive_score' => $rawResult[0]['label'] === 'POSITIVE' ? $rawResult[0]['score'] : ($rawResult[1]['label'] === 'POSITIVE' ? $rawResult[1]['score'] : null),
-                    'negative_score' => $rawResult[0]['label'] === 'NEGATIVE' ? $rawResult[0]['score'] : ($rawResult[1]['label'] === 'NEGATIVE' ? $rawResult[1]['score'] : null),
+                'data'   => $chatRating,
+                'debug'  => [
+                    'bert_raw_result'  => $rawResult,
+                    'positive_score'   => collect($rawResult)->firstWhere('label', 'POSITIVE')['score'] ?? null,
+                    'negative_score'   => collect($rawResult)->firstWhere('label', 'NEGATIVE')['score'] ?? null,
+                    'hf_token_set'     => !empty(config('services.bert.token')),
+                    'bert_endpoint'    => config('services.bert.endpoint'),
                 ],
             ]);
         } catch (\Exception $e) {
@@ -59,9 +61,9 @@ class SentimentAnalysisController extends Controller
             ]);
 
             return response()->json([
-                'status' => 'error',
+                'status'  => 'error',
                 'message' => 'Failed to analyze sentiment',
-                'detail' => $e->getMessage(),
+                'detail'  => $e->getMessage(),
             ], 500);
         }
     }
