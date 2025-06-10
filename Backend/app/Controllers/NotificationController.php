@@ -2,9 +2,10 @@
 
 namespace App\Controllers;
 
+use App\Models\Notification;
 use App\Services\FCMService;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class NotificationController extends Controller
 {
@@ -23,19 +24,30 @@ class NotificationController extends Controller
 
     public function markRead(Request $request, int $id): JsonResponse
     {
-        $notif = $request->user()->notifications()->findOrFail($id);
-        $notif->is_read = true;
-        $notif->save();
+        $notification = $request->user()->notifications()->findOrFail($id);
+        $notification->is_read = true;
+        $notification->save();
 
-        if ($request->user()->fcm_token) {
-            $this->fcm->sendToUser(
-                $request->user()->fcm_token,
-                'Notification Read',
-                'Notification has been read',
-                ['notification_id' => $notif->id]
-            );
-        }
+        $this->fcm->sendToUser(
+            $request->user()->fcm_token,
+            'Notification Read',
+            'تم قراءة الإشعار بنجاح',
+            ['notification_id' => $notification->id]
+        );
 
-        return response()->json($notif);
+        return response()->json($notification);
+    }
+
+    public function storeFCMToken(Request $request): JsonResponse
+    {
+        $request->validate([
+            'fcm_token' => 'required|string'
+        ]);
+
+        $request->user()->update([
+            'fcm_token' => $request->input('fcm_token')
+        ]);
+
+        return response()->json(['message' => 'FCM token saved']);
     }
 }
