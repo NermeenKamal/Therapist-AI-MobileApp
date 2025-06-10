@@ -9,6 +9,25 @@ HF_TOKEN = os.getenv("HF_TOKEN")
 
 headers = {"Authorization": f"Bearer {HF_TOKEN}"}
 
+@app.get("/health")
+def health_check():
+    return {"status": "ok", "service": "bert", "huggingface_model": HF_MODEL}
+
+
+@app.get("/test-model")
+def test_model():
+    headers = {"Authorization": f"Bearer {HF_TOKEN}"}
+    hf_url = f"https://api-inference.huggingface.co/models/{HF_MODEL}"
+    
+    sample_input = {"inputs": "You are a great doctor!"}
+    
+    try:
+        response = requests.post(hf_url, headers=headers, json=sample_input)
+        return response.json()
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @app.get("/debug")
 def debug():
     return {
