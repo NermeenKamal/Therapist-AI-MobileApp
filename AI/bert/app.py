@@ -21,7 +21,8 @@ async def predict(request: Request):
     if not text:
         return {"error": "Missing text"}
     
-    response = requests.post(HF_API_URL, headers=headers, json={"inputs": text})
+response = requests.post(HF_API_URL, headers=headers, json={"inputs": text})
+print("Raw response from HF:", response.status_code, response.text)
 
     try:
         result = response.json()
