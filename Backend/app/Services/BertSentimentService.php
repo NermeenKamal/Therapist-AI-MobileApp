@@ -21,10 +21,10 @@ class BertSentimentService
    public function analyze(string $text): array
 {
     try {
-       $response = Http::withToken(config('services.bert.token')) // Use config, not env
-            ->post($this->bertEndpoint, [
-                'text' => $text, // or 'inputs' => $text, depending on FastAPI
-            ]);
+       $response = Http::post($this->bertEndpoint, [
+            'text' => $text,
+        ]);
+
         
         \Log::info('BERT Response Status', ['status' => $response->status()]);
         \Log::info('BERT Raw Body', ['body' => $response->body()]);
