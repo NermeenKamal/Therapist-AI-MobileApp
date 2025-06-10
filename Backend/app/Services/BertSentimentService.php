@@ -7,45 +7,56 @@ use Illuminate\Support\Facades\Http;
 class BertSentimentService
 {
     protected string $bertEndpoint;
-    protected ?string $token;
+    protected string $token;
 
     public function __construct()
     {
         $this->bertEndpoint = config('services.bert.endpoint');
         $this->token = config('services.bert.token');
 
+        \Log::info('Initializing BertSentimentService', [
+            'endpoint' => $this->bertEndpoint,
+            'token_present' => !empty($this->token)
+        ]);
+
         if (empty($this->bertEndpoint)) {
             throw new \RuntimeException('BERT API endpoint is not configured properly.');
+        }
+
+        if (empty($this->token)) {
+            throw new \RuntimeException('Hugging Face token (HF_TOKEN) is missing.');
         }
     }
 
     public function analyze(string $text): array
     {
         try {
-            $request = Http::withHeaders(
-                $this->token ? ['Authorization' => 'Bearer ' . $this->token] : []
-            )->post($this->bertEndpoint, [
+            \Log::info('Sending request to BERT API', ['text' => $text]);
+
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $this->token,
+            ])->post($this->bertEndpoint, [
                 'inputs' => $text,
             ]);
 
-            \Log::info('BERT response status', ['status' => $request->status()]);
-            \Log::info('BERT raw body', ['body' => $request->body()]);
+            \Log::info('BERT API Response', [
+                'status' => $response->status(),
+                'body' => $response->body()
+            ]);
 
-            if ($request->failed()) {
+            if ($response->failed()) {
                 \Log::error('BERT API request failed', [
-                    'status' => $request->status(),
-                    'body' => $request->body(),
+                    'status' => $response->status(),
+                    'body' => $response->body(),
                 ]);
-                return $this->defaultResult();
+                return $this->defaultResult('API request failed');
             }
 
-            $data = $request->json();
-            \Log::debug('BERT decoded JSON:', $data);
+            $data = $response->json();
 
-            // تحقق من الشكل المتوقع للرد
-            if (!is_array($data) || !isset($data[0]['label'], $data[0]['score'])) {
-                \Log::warning('Invalid or incomplete BERT response', ['response' => $data]);
-                return $this->defaultResult();
+            if (!is_array($data) || !isset($data[0]['label'])) {
+                \Log::warning('Unexpected BERT response format', ['data' => $data]);
+                return $this->defaultResult('Unexpected response format');
             }
 
             $results = collect($data);
@@ -56,13 +67,13 @@ class BertSentimentService
             $rawRating = $total > 0 ? ($positive / $total) * 5 : 2.5;
             $roundedRating = round($rawRating * 2) / 2;
 
-            $label = $positive > $negative ? 'positive' : ($negative > $positive ? 'negative' : 'neutral');
+            $label = $positive > $negative ? 'positive' : 'negative';
             $score = max($positive, $negative);
 
             $feedback = match ($label) {
                 'positive' => 'The doctor\'s response was professional and supportive.',
                 'negative' => 'The doctor\'s response may be inappropriate or unhelpful.',
-                default => 'Could not analyze sentiment.',
+                default    => 'The tone of the message is neutral.',
             };
 
             return [
@@ -70,25 +81,25 @@ class BertSentimentService
                 'score' => $score,
                 'feedback' => $feedback,
                 'rating' => $roundedRating,
-                'result' => $data, // نحتفظ بالرد الأصلي
+                'raw_result' => $data,
             ];
         } catch (\Exception $e) {
             \Log::error('Exception during sentiment analysis', [
-                'error' => $e->getMessage(),
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
-
-            return $this->defaultResult();
+            return $this->defaultResult($e->getMessage());
         }
     }
 
-    protected function defaultResult(): array
+    protected function defaultResult(string $reason = 'Unknown error'): array
     {
         return [
             'label' => 'neutral',
             'score' => null,
             'feedback' => 'Could not analyze sentiment.',
             'rating' => 3,
-            'result' => [],
+            'raw_result' => ['error_reason' => $reason]
         ];
     }
 }
