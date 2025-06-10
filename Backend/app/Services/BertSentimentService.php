@@ -32,11 +32,11 @@ class BertSentimentService
                 'inputs' => $text,
             ]);
 
-            \Log::info('🔍 BERT Response Status', ['status' => $response->status()]);
-            \Log::info('🧠 BERT Raw Body', ['body' => $response->body()]);
+            \Log::info('BERT Response Status', ['status' => $response->status()]);
+            \Log::info('BERT Raw Body', ['body' => $response->body()]);
 
             if ($response->failed()) {
-                \Log::error('❌ BERT API request failed', [
+                \Log::error('BERT API request failed', [
                     'status' => $response->status(),
                     'body' => $response->body(),
                 ]);
@@ -46,6 +46,7 @@ class BertSentimentService
 
             $data = $response->json();
 
+            // Check if it's valid list-style BERT output
             if (!is_array($data) || !isset($data[0]['label'])) {
                 throw new \Exception('Invalid BERT response format');
             }
@@ -54,35 +55,37 @@ class BertSentimentService
             $positive = $results->firstWhere('label', 'POSITIVE')['score'] ?? 0;
             $negative = $results->firstWhere('label', 'NEGATIVE')['score'] ?? 0;
 
-            // احسب الـ rating بشكل طبيعي
-            $total = $positive + $negative;
-            $rawRating = $total > 0 ? ($positive / $total) * 5 : 2.5;
-            $roundedRating = round($rawRating * 2) / 2;
+            $scoreDifference = abs($positive - $negative);
 
-            // تحديد الليبل بدقة
-            $label = match (true) {
-                $positive === $negative => 'neutral',
-                $positive > $negative => 'positive',
-                default => 'negative',
-            };
+            // If scores are too close, label as neutral
+            if ($scoreDifference < 0.2) {
+                $label = 'neutral';
+            } else {
+                $label = $positive > $negative ? 'positive' : 'negative';
+            }
 
             $score = max($positive, $negative);
 
+            // Feedback text
             $feedback = match ($label) {
                 'positive' => 'The doctor\'s response was professional and supportive.',
                 'negative' => 'The doctor\'s response may be inappropriate or unhelpful.',
-                default     => 'The tone of the message is neutral.',
+                default => 'User experience was neutral.',
             };
 
+            // Rating logic
+            $rawRating = ($positive / ($positive + $negative)) * 5;
+            $roundedRating = round($rawRating * 2) / 2;
+
             return [
-                'label'    => $label,
-                'score'    => $score,
+                'label' => $label,
+                'score' => $score,
                 'feedback' => $feedback,
-                'rating'   => $roundedRating,
-                'result'   => $data, // optionally include full result
+                'rating' => $roundedRating,
+                'raw_result' => $data, // Optional: keep raw if needed for debugging
             ];
         } catch (\Exception $e) {
-            \Log::error('❗ Exception during sentiment analysis', [
+            \Log::error('Exception during sentiment analysis', [
                 'error' => $e->getMessage(),
             ]);
 
@@ -93,11 +96,10 @@ class BertSentimentService
     protected function defaultResult(): array
     {
         return [
-            'label'    => 'neutral',
-            'score'    => null,
+            'label' => 'neutral',
+            'score' => null,
             'feedback' => 'Could not analyze sentiment.',
-            'rating'   => 3,
-            'result'   => [],
+            'rating' => 3,
         ];
     }
 }
