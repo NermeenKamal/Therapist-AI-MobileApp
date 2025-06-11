@@ -9,6 +9,8 @@ class SendAppointmentConfirmedNotification
     public function handle(AppointmentConfirmed $event): void
     {
         $appointment = $event->appointment;
+        $appointment->load('patient');
+
         $patient = $appointment->patient;
 
         if ($patient && $patient->fcm_token) {
@@ -21,3 +23,4 @@ class SendAppointmentConfirmedNotification
         }
     }
 }
+
