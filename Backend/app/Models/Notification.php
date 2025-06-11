@@ -15,5 +15,10 @@ class Notification extends Model
     {
         return $this->morphTo();
     }
+    public function sender()
+{
+    return $this->morphTo();
+}
+
 }
 
