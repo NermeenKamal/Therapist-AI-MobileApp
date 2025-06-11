@@ -18,6 +18,7 @@ use App\Controllers\ArticleController;
 use App\Controllers\FCMController;
 use App\Controllers\PatientController;
 
+Route::middleware('auth:sanctum')->get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
 
 Route::post('chat/send-message', [ChatGPTController::class,'sendMessage']);
 Route::post('chat/get-messages', [ChatGPTController::class,'getMessages']);
