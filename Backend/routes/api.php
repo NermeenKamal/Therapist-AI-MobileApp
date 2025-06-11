@@ -18,8 +18,6 @@ use App\Controllers\ArticleController;
 use App\Controllers\FCMController;
 use App\Controllers\PatientController;
 
-Route::middleware('auth:sanctum')->get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
-
 Route::post('chat/send-message', [ChatGPTController::class,'sendMessage']);
 Route::post('chat/get-messages', [ChatGPTController::class,'getMessages']);
 Route::post('chat/generate-report', [ChatGPTController::class,'generateReport']);
@@ -101,6 +99,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('notifications/{id}/read', [NotificationController::class, 'markRead']);
     Route::post('notifications/broadcast', [BroadcastNotificationController::class, 'broadcast']);
     Route::post('notifications/send', [NotificationController::class, 'sendNotification']);
+    Route::get('notifications/unread-count', [NotificationController::class, 'unreadCount']);
 
     // OCR, Sentiment, Reports
     Route::post('verify-doctor-id', [OcrVerificationController::class, 'verify']);
