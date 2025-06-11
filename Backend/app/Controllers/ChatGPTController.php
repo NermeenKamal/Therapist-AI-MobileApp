@@ -66,7 +66,7 @@ public function sendMessage(Request $request)
             }
 
             $resp = OpenAI::chat()->create([
-                'model'=>'gpt-4o', // استخدمي gpt-4o أو gpt-3.5 حسب الحاجة
+                'model'=>'gpt-4o-mini', 
                 'messages'=>[
                     ['role'=>'system','content'=>'You are a helpful assistant.'],
                     ['role'=>'user','content'=>$prompt]
