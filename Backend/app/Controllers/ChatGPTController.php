@@ -16,10 +16,10 @@ public function sendMessage(Request $request)
 
     $response = Http::withHeaders([
         'Content-Type' => 'application/json',
-        'x-rapidapi-host' => 'gpt-4o-mini.p.rapidapi.com',
+        'x-rapidapi-host' => 'cheapest-gpt-4-turbo-gpt-4-vision-chatgpt-openai-ai-api.p.rapidapi.com',
         'x-rapidapi-key' => env('RAPIDAPI_KEY'), 
-    ])->post('https://gpt-4o-mini.p.rapidapi.com/chat/completions', [
-        'model' => 'gpt-4o-mini',
+    ])->post('https://cheapest-gpt-4-turbo-gpt-4-vision-chatgpt-openai-ai-api.p.rapidapi.com/v1/chat/completions', [
+        'model' => 'gpt-4o',
         'messages' => [
             ['role' => 'user', 'content' => $userMessage]
         ],
@@ -66,7 +66,7 @@ public function sendMessage(Request $request)
             }
 
             $resp = OpenAI::chat()->create([
-                'model'=>'gpt-4o-mini', 
+                'model'=>'gpt-4o', 
                 'messages'=>[
                     ['role'=>'system','content'=>'You are a helpful assistant.'],
                     ['role'=>'user','content'=>$prompt]
