@@ -74,27 +74,40 @@ class NotificationController extends Controller
         'user_id' => 'required|integer'
     ]);
 
-    $userModel = $request->user_type === 'doctor'
+    $sender = $request->user(); // المستخدم الحالي اللي بيبعت الإشعار
+
+    // حدد مستقبل الإشعار حسب النوع اللي اتبعت
+    $recipientModel = $request->user_type === 'doctor'
         ? \App\Models\Doctor::class
         : \App\Models\Patient::class;
 
-    $user = $userModel::findOrFail($request->user_id);
+    $recipient = $recipientModel::findOrFail($request->user_id);
 
-    // احفظ الإشعار في قاعدة البيانات
-    $notification = $user->notifications()->create([
+    // سجل الإشعار عند المستقبل
+    $notification = $recipient->notifications()->create([
         'title' => $request->title,
         'message' => $request->message,
+        'sender_id' => $sender->id,
+        'sender_type' => get_class($sender),
     ]);
 
-    // ابعت الإشعار لو عنده FCM Token
-    if ($user->fcm_token) {
+    // ابعت الإشعار عن طريق FCM لو عنده توكن
+    if ($recipient->fcm_token) {
         $this->fcm->sendToUser(
-            $user->fcm_token,
+            $recipient->fcm_token,
             $request->title,
             $request->message,
-            ['notification_id' => $notification->id]
+            [
+                'notification_id' => $notification->id,
+                'sender_id' => $sender->id,
+                'sender_type' => get_class($sender),
+            ]
         );
     }
+
+    return response()->json(['message' => 'Notification sent successfully']);
+}
+
 
     return response()->json(['message' => 'Notification sent successfully']);
 }
