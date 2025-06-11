@@ -9,28 +9,37 @@ use Illuminate\Support\Facades\Log;
 
 class ChatGPTController extends Controller
 {
-    public function sendMessage(Request $request)
-    {
-        $userMessage = $request->input('message');
+   use Illuminate\Support\Facades\Http;
 
-        $response = Http::withToken(env('OPENAI_API_KEY'))->post('https://api.openai.com/v1/chat/completions', [
-            'model' => 'gpt-3.5-turbo',
-            'messages' => [
-                ['role' => 'user', 'content' => $userMessage]
-            ]
-        ]);
+public function sendMessage(Request $request)
+{
+    $userMessage = $request->input('message');
 
-        if ($response->failed()) {
-            return response()->json([
-                'error' => 'حدث خطأ أثناء الاتصال بـ OpenAI.',
-                'details' => $response->json()
-            ], 500);
-        }
+    $response = Http::withHeaders([
+        'Content-Type' => 'application/json',
+        'x-rapidapi-host' => 'cheapest-gpt-4-turbo-gpt-4-vision-chatgpt-openai-ai-api.p.rapidapi.com',
+        'x-rapidapi-key' => env('RAPIDAPI_KEY'), // ضيفي المفتاح في .env
+    ])->post('https://cheapest-gpt-4-turbo-gpt-4-vision-chatgpt-openai-ai-api.p.rapidapi.com/v1/chat/completions', [
+        'model' => 'gpt-4o',
+        'messages' => [
+            ['role' => 'user', 'content' => $userMessage]
+        ],
+        'max_tokens' => 100,
+        'temperature' => 0.9
+    ]);
 
+    if ($response->failed()) {
         return response()->json([
-            'response' => $response->json()['choices'][0]['message']['content']
-        ]);
+            'error' => 'حدث خطأ أثناء الاتصال بـ RapidAPI.',
+            'details' => $response->json()
+        ], 500);
     }
+
+    return response()->json([
+        'response' => $response->json()['choices'][0]['message']['content']
+    ]);
+}
+
 
     public function getMessages(Request $req)
     {
