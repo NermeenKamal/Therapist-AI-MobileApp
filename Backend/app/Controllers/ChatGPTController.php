@@ -17,7 +17,7 @@ public function sendMessage(Request $request)
     $response = Http::withHeaders([
         'Content-Type' => 'application/json',
         'x-rapidapi-host' => 'cheapest-gpt-4-turbo-gpt-4-vision-chatgpt-openai-ai-api.p.rapidapi.com',
-        'x-rapidapi-key' => env('RAPIDAPI_KEY'), // ضيفي المفتاح في .env
+        'x-rapidapi-key' => env('RAPIDAPI_KEY'), 
     ])->post('https://cheapest-gpt-4-turbo-gpt-4-vision-chatgpt-openai-ai-api.p.rapidapi.com/v1/chat/completions', [
         'model' => 'gpt-4o',
         'messages' => [
