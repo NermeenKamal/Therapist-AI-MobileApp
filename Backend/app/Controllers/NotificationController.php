@@ -38,6 +38,20 @@ class NotificationController extends Controller
         return response()->json($notification);
     }
 
+    public function unreadCount(Request $request): JsonResponse
+{
+    $user = $request->user();
+
+    if (!$user) {
+        return response()->json(['error' => 'Unauthorized'], 401);
+    }
+
+    $count = $user->notifications()->where('is_read', false)->count();
+
+    return response()->json(['unread_count' => $count]);
+}
+
+
     public function storeFCMToken(Request $request): JsonResponse
     {
         $request->validate([
