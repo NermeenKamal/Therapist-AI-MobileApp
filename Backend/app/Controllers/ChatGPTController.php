@@ -9,7 +9,6 @@ use Illuminate\Support\Facades\Log;
 
 class ChatGPTController extends Controller
 {
-   use Illuminate\Support\Facades\Http;
 
 public function sendMessage(Request $request)
 {
