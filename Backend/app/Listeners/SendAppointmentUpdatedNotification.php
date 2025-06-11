@@ -9,17 +9,19 @@ class SendAppointmentUpdatedNotification
     public function handle(AppointmentUpdated $event): void
     {
         $appointment = $event->appointment;
-        $other = $appointment->patient_id === auth()->id()
-            ? $appointment->doctor
-            : $appointment->patient;
+        $appointment->load(['doctor', 'patient']);
 
-        if ($other && $other->fcm_token) {
-            app(FCMService::class)->sendToUser(
-                $other->fcm_token,
-                'تم تعديل الموعد',
-                'تم تعديل موعد رقم: ' . $appointment->id,
-                ['appointment_id' => $appointment->id]
-            );
+        // ابعت للطرفين: الدكتور والمريض
+        foreach ([$appointment->doctor, $appointment->patient] as $user) {
+            if ($user && $user->fcm_token) {
+                app(FCMService::class)->sendToUser(
+                    $user->fcm_token,
+                    'تم تعديل الموعد',
+                    'تم تعديل موعد رقم: ' . $appointment->id,
+                    ['appointment_id' => $appointment->id]
+                );
+            }
         }
     }
 }
+
