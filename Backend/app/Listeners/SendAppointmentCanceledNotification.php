@@ -9,13 +9,14 @@ class SendAppointmentCanceledNotification
     public function handle(AppointmentCanceled $event): void
     {
         $appointment = $event->appointment;
-        $other = $appointment->patient_id === auth()->id()
-            ? $appointment->doctor
-            : $appointment->patient;
+        $appointment->load(['doctor', 'patient']);
 
-        if ($other && $other->fcm_token) {
+        // مثلاً لو الطبيب هو اللي لغى، ابعت للمريض، والعكس
+        $receiver = $appointment->patient;
+
+        if ($receiver && $receiver->fcm_token) {
             app(FCMService::class)->sendToUser(
-                $other->fcm_token,
+                $receiver->fcm_token,
                 'تم إلغاء الموعد',
                 'رقم الموعد: ' . $appointment->id,
                 ['appointment_id' => $appointment->id]
