@@ -84,12 +84,13 @@ class NotificationController extends Controller
     $recipient = $recipientModel::findOrFail($request->user_id);
 
     // سجل الإشعار عند المستقبل
-    $notification = $recipient->notifications()->create([
-        'title' => $request->title,
-        'message' => $request->message,
-        'sender_id' => $sender->id,
-        'sender_type' => get_class($sender),
-    ]);
+   $notification = $recipient->notifications()->create([
+    'title' => $request->title,
+    'message' => $request->message,
+    'sender_id' => $sender->id,
+    'sender_type' => get_class($sender), // دي اللي هتخزن App\Models\Doctor أو App\Models\Patient
+]);
+
 
     // ابعت الإشعار عن طريق FCM لو عنده توكن
     if ($recipient->fcm_token) {
