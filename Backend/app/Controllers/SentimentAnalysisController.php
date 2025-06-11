@@ -46,13 +46,13 @@ class SentimentAnalysisController extends Controller
             return response()->json([
                 'status' => 'success',
                 'data'   => $chatRating,
-                'debug'  => [
-                    'bert_raw_result'  => $rawResult,
-                    'positive_score'   => collect($rawResult)->firstWhere('label', 'POSITIVE')['score'] ?? null,
-                    'negative_score'   => collect($rawResult)->firstWhere('label', 'NEGATIVE')['score'] ?? null,
-                    'hf_token_set'     => !empty(config('services.bert.token')),
-                    'bert_endpoint'    => config('services.bert.endpoint'),
-                ],
+                // 'debug'  => [
+                //     'bert_raw_result'  => $rawResult,
+                //     'positive_score'   => collect($rawResult)->firstWhere('label', 'POSITIVE')['score'] ?? null,
+                //     'negative_score'   => collect($rawResult)->firstWhere('label', 'NEGATIVE')['score'] ?? null,
+                //     'hf_token_set'     => !empty(config('services.bert.token')),
+                //     'bert_endpoint'    => config('services.bert.endpoint'),
+                // ],
             ]);
         } catch (\Exception $e) {
             \Log::error('Exception in SentimentAnalysisController', [
