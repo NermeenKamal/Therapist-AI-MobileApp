@@ -1,33 +1,28 @@
 <?php
-
 namespace App\Controllers;
 
-use App\Resources\AppointmentResource;
-use App\Resources\AppointmentIndexResource;
 use App\Models\Appointment;
-use App\Models\User;
 use App\Models\Doctor;
-use App\Services\FCMService;
-use Illuminate\Http\Request;
+use App\Resources\AppointmentIndexResource;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 
+// Events
+use App\Events\AppointmentBooked;
+use App\Events\AppointmentCanceled;
+use App\Events\AppointmentConfirmed;
+use App\Events\AppointmentUpdated;
+
 class AppointmentController extends Controller
 {
-    protected FCMService $fcm;
-
-    public function __construct(FCMService $fcm)
-    {
-        $this->fcm = $fcm;
-    }
-
-    // جلب كل مواعيد المستخدم (الدكتور أو المريض)
+    // جلب كل مواعيد المستخدم
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
 
-        $appointments = Appointment::where(function($q) use ($user) {
+        $appointments = Appointment::where(function ($q) use ($user) {
             $q->where('patient_id', $user->id)
               ->orWhere('doctor_id', $user->id);
         })->with(['doctor', 'patient'])->get();
@@ -38,39 +33,23 @@ class AppointmentController extends Controller
     // الدكتور ينشئ موعد متاح
     public function createAvailableAppointment(Request $request): JsonResponse
     {
-        \Log::info('Authenticated user:', [
-            'class' => get_class(Auth::user()),
-            'attributes' => Auth::user()?->toArray(),
-        ]);
-
         $this->authorize('create', Appointment::class);
 
         $data = $request->validate([
             'appointment_date' => 'required|date',
-            'notes'            => 'nullable|string',
-            'price'            => 'nullable|numeric',
+            'notes' => 'nullable|string',
+            'price' => 'nullable|numeric',
         ]);
 
         $appointment = Appointment::create([
-            'doctor_id'        => Auth::id(),
+            'doctor_id' => Auth::id(),
             'appointment_date' => $data['appointment_date'],
-            'status'           => Appointment::STATUS_AVAILABLE,
-            'notes'            => $data['notes']  ?? null,
-            'price'            => $data['price']  ?? null,
+            'status' => Appointment::STATUS_AVAILABLE,
+            'notes' => $data['notes'] ?? null,
+            'price' => $data['price'] ?? null,
         ]);
 
         return response()->json($appointment, 201);
-    }
-
-    // عرض المواعيد المتاحة لدكتور معيّن
-    public function availableForDoctor(int $doctorId): JsonResponse
-    {
-        $appointments = Appointment::where('doctor_id', $doctorId)
-            ->whereNull('patient_id')
-            ->where('status', Appointment::STATUS_AVAILABLE)
-            ->get();
-
-        return response()->json($appointments);
     }
 
     // المريض يحجز موعد جاهز
@@ -83,42 +62,15 @@ class AppointmentController extends Controller
 
         $appointment->update([
             'patient_id' => Auth::id(),
-            'status'     => Appointment::STATUS_PENDING,
+            'status' => Appointment::STATUS_PENDING,
         ]);
 
-        // إشعار للدكتور - مع حماية من أخطاء Firebase
-        try {
-            if ($appointment->doctor && $appointment->doctor->fcm_token) {
-                $this->fcm->sendToUser(
-                    $appointment->doctor->fcm_token,
-                    'New appointment booked',
-                    'Appointment booked by: ' . Auth::user()->name,
-                    ['appointment_id' => $appointment->id]
-                );
-            }
-        } catch (\Exception $e) {
-            // تسجيل الخطأ بدون إيقاف العملية
-            Log::warning('FCM notification failed in bookAvailableAppointment: ' . $e->getMessage(), [
-                'appointment_id' => $appointment->id,
-                'doctor_id' => $appointment->doctor_id,
-                'patient_id' => Auth::id()
-            ]);
-        }
+        event(new AppointmentBooked($appointment));
 
-        $data = $appointment->only([
-            'id',
-            'notes',
-            'status',
-            'appointment_date',
-            'price',
-            'patient_id',
-            'doctor_id'
-        ]);
-
-        return response()->json(['appointment' => $data]);
+        return response()->json(['appointment' => $appointment]);
     }
 
-    // الدكتور يؤكد الحجز
+    // تأكيد الموعد من الدكتور
     public function confirm(Request $request, int $id): JsonResponse
     {
         $appointment = Appointment::findOrFail($id);
@@ -132,37 +84,12 @@ class AppointmentController extends Controller
             'status' => Appointment::STATUS_BOOKED,
         ]);
 
-        // إشعار للمريض
-        try {
-            if ($appointment->patient && $appointment->patient->fcm_token) {
-                $this->fcm->sendToUser(
-                    $appointment->patient->fcm_token,
-                    'Appointment confirmed',
-                    'Your appointment has been confirmed by the doctor.',
-                    ['appointment_id' => $appointment->id]
-                );
-            }
-        } catch (\Exception $e) {
-            Log::warning('FCM notification failed in confirm: ' . $e->getMessage(), [
-                'appointment_id' => $appointment->id,
-                'user_id' => Auth::id()
-            ]);
-        }
+        event(new AppointmentConfirmed($appointment));
 
-        $data = $appointment->only([
-            'id',
-            'notes',
-            'status',
-            'appointment_date',
-            'price',
-            'patient_id',
-            'doctor_id'
-        ]);
-
-        return response()->json(['appointment' => $data]);
+        return response()->json(['appointment' => $appointment]);
     }
 
-    // تعديل موعد (تاريخ/ملاحظات)
+    // تعديل الموعد
     public function update(Request $request, int $id): JsonResponse
     {
         $appointment = Appointment::findOrFail($id);
@@ -170,94 +97,36 @@ class AppointmentController extends Controller
 
         $data = $request->validate([
             'appointment_date' => 'sometimes|date',
-            'notes'            => 'nullable|string',
-            'price'            => 'nullable|numeric',
+            'notes' => 'nullable|string',
+            'price' => 'nullable|numeric',
         ]);
 
         $appointment->update($data);
 
-        // إشعار الطرف الآخر مع حماية الأخطاء
-        try {
-            $other = $appointment->patient_id === auth()->id()
-                ? $appointment->doctor
-                : $appointment->patient;
-
-            if ($other && $other->fcm_token) {
-                $this->fcm->sendToUser(
-                    $other->fcm_token,
-                    'Appointment edited',
-                    'Appointment edited number: ' . $appointment->id,
-                    ['appointment_id' => $appointment->id]
-                );
-            }
-        } catch (\Exception $e) {
-            Log::warning('FCM notification failed in update: ' . $e->getMessage(), [
-                'appointment_id' => $appointment->id,
-                'user_id' => auth()->id(),
-            ]);
-        }
-
-        $filtered = $appointment->only([
-            'id',
-            'notes',
-            'status',
-            'appointment_date',
-            'price',
-            'patient_id',
-            'doctor_id'
-        ]);
+        event(new AppointmentUpdated($appointment));
 
         return response()->json([
             'message' => 'Appointment updated successfully',
-            'appointment' => $filtered
+            'appointment' => $appointment
         ]);
     }
 
-    // إلغاء موعد
+    // إلغاء الموعد
     public function cancel(Request $request, int $id): JsonResponse
     {
         $appointment = Appointment::findOrFail($id);
         $this->authorize('cancel', $appointment);
 
         $appointment->update([
-            'status'      => Appointment::STATUS_CANCELED,
+            'status' => Appointment::STATUS_CANCELED,
             'canceled_by' => Auth::id(),
         ]);
 
-        // إشعار للطرف الآخر - مع حماية من أخطاء Firebase
-        try {
-            $other = $appointment->patient_id === Auth::id()
-                ? $appointment->doctor
-                : $appointment->patient;
-
-            if ($other && $other->fcm_token) {
-                $this->fcm->sendToUser(
-                    $other->fcm_token,
-                    'Appointment canceled',
-                    'Appointment canceled number: ' . $appointment->id,
-                    ['appointment_id' => $appointment->id]
-                );
-            }
-        } catch (\Exception $e) {
-            Log::warning('FCM notification failed in cancel: ' . $e->getMessage(), [
-                'appointment_id' => $appointment->id,
-                'user_id' => Auth::id()
-            ]);
-        }
-
-        $filtered = $appointment->only([
-            'id',
-            'notes',
-            'status',
-            'appointment_date',
-            'price',
-            'patient_id',
-            'doctor_id'
-        ]);
+        event(new AppointmentCanceled($appointment));
 
         return response()->json([
-            'message' => 'Appointment updated successfully',
-            'appointment' => $filtered
+            'message' => 'Appointment canceled successfully',
+            'appointment' => $appointment
         ]);
     }
 
@@ -268,16 +137,304 @@ class AppointmentController extends Controller
         return response()->json($specs);
     }
 
-    // جلب الأطباء حسب تخصص
+    // الأطباء حسب التخصص
     public function doctorsBySpecialization(string $specialization): JsonResponse
     {
         $doctors = Doctor::where('specialization', $specialization)->get();
         return response()->json($doctors);
     }
 
-    // نطّف الميثود القديم
+    // قديم - تم تعطيله
     public function store(Request $request): JsonResponse
     {
         return response()->json(['message' => 'Booking by schedule is disabled.'], 403);
     }
 }
+
+
+
+
+
+
+
+// namespace App\Controllers;
+
+// use App\Resources\AppointmentResource;
+// use App\Resources\AppointmentIndexResource;
+// use App\Models\Appointment;
+// use App\Models\User;
+// use App\Models\Doctor;
+// use App\Services\FCMService;
+// use Illuminate\Http\Request;
+// use Illuminate\Http\JsonResponse;
+// use Illuminate\Support\Facades\Auth;
+// use Illuminate\Support\Facades\Log;
+
+// class AppointmentController extends Controller
+// {
+//     protected FCMService $fcm;
+
+//     public function __construct(FCMService $fcm)
+//     {
+//         $this->fcm = $fcm;
+//     }
+
+//     // جلب كل مواعيد المستخدم (الدكتور أو المريض)
+//     public function index(Request $request): JsonResponse
+//     {
+//         $user = $request->user();
+
+//         $appointments = Appointment::where(function($q) use ($user) {
+//             $q->where('patient_id', $user->id)
+//               ->orWhere('doctor_id', $user->id);
+//         })->with(['doctor', 'patient'])->get();
+
+//         return response()->json(AppointmentIndexResource::collection($appointments));
+//     }
+
+//     // الدكتور ينشئ موعد متاح
+//     public function createAvailableAppointment(Request $request): JsonResponse
+//     {
+//         \Log::info('Authenticated user:', [
+//             'class' => get_class(Auth::user()),
+//             'attributes' => Auth::user()?->toArray(),
+//         ]);
+
+//         $this->authorize('create', Appointment::class);
+
+//         $data = $request->validate([
+//             'appointment_date' => 'required|date',
+//             'notes'            => 'nullable|string',
+//             'price'            => 'nullable|numeric',
+//         ]);
+
+//         $appointment = Appointment::create([
+//             'doctor_id'        => Auth::id(),
+//             'appointment_date' => $data['appointment_date'],
+//             'status'           => Appointment::STATUS_AVAILABLE,
+//             'notes'            => $data['notes']  ?? null,
+//             'price'            => $data['price']  ?? null,
+//         ]);
+
+//         return response()->json($appointment, 201);
+//     }
+
+//     // عرض المواعيد المتاحة لدكتور معيّن
+//     public function availableForDoctor(int $doctorId): JsonResponse
+//     {
+//         $appointments = Appointment::where('doctor_id', $doctorId)
+//             ->whereNull('patient_id')
+//             ->where('status', Appointment::STATUS_AVAILABLE)
+//             ->get();
+
+//         return response()->json($appointments);
+//     }
+
+//     // المريض يحجز موعد جاهز
+//     public function bookAvailableAppointment(Request $request, int $id): JsonResponse
+//     {
+//         $appointment = Appointment::where('id', $id)
+//             ->whereNull('patient_id')
+//             ->where('status', Appointment::STATUS_AVAILABLE)
+//             ->firstOrFail();
+
+//         $appointment->update([
+//             'patient_id' => Auth::id(),
+//             'status'     => Appointment::STATUS_PENDING,
+//         ]);
+
+//         // إشعار للدكتور - مع حماية من أخطاء Firebase
+//         try {
+//             if ($appointment->doctor && $appointment->doctor->fcm_token) {
+//                 $this->fcm->sendToUser(
+//                     $appointment->doctor->fcm_token,
+//                     'New appointment booked',
+//                     'Appointment booked by: ' . Auth::user()->name,
+//                     ['appointment_id' => $appointment->id]
+//                 );
+//             }
+//         } catch (\Exception $e) {
+//             // تسجيل الخطأ بدون إيقاف العملية
+//             Log::warning('FCM notification failed in bookAvailableAppointment: ' . $e->getMessage(), [
+//                 'appointment_id' => $appointment->id,
+//                 'doctor_id' => $appointment->doctor_id,
+//                 'patient_id' => Auth::id()
+//             ]);
+//         }
+
+//         $data = $appointment->only([
+//             'id',
+//             'notes',
+//             'status',
+//             'appointment_date',
+//             'price',
+//             'patient_id',
+//             'doctor_id'
+//         ]);
+
+//         return response()->json(['appointment' => $data]);
+//     }
+
+//     // الدكتور يؤكد الحجز
+//     public function confirm(Request $request, int $id): JsonResponse
+//     {
+//         $appointment = Appointment::findOrFail($id);
+//         $this->authorize('confirm', $appointment);
+
+//         if ($appointment->status !== Appointment::STATUS_PENDING) {
+//             return response()->json(['message' => 'Only pending appointments can be confirmed.'], 400);
+//         }
+
+//         $appointment->update([
+//             'status' => Appointment::STATUS_BOOKED,
+//         ]);
+
+//         // إشعار للمريض
+//         try {
+//             if ($appointment->patient && $appointment->patient->fcm_token) {
+//                 $this->fcm->sendToUser(
+//                     $appointment->patient->fcm_token,
+//                     'Appointment confirmed',
+//                     'Your appointment has been confirmed by the doctor.',
+//                     ['appointment_id' => $appointment->id]
+//                 );
+//             }
+//         } catch (\Exception $e) {
+//             Log::warning('FCM notification failed in confirm: ' . $e->getMessage(), [
+//                 'appointment_id' => $appointment->id,
+//                 'user_id' => Auth::id()
+//             ]);
+//         }
+
+//         $data = $appointment->only([
+//             'id',
+//             'notes',
+//             'status',
+//             'appointment_date',
+//             'price',
+//             'patient_id',
+//             'doctor_id'
+//         ]);
+
+//         return response()->json(['appointment' => $data]);
+//     }
+
+//     // تعديل موعد (تاريخ/ملاحظات)
+//     public function update(Request $request, int $id): JsonResponse
+//     {
+//         $appointment = Appointment::findOrFail($id);
+//         $this->authorize('update', $appointment);
+
+//         $data = $request->validate([
+//             'appointment_date' => 'sometimes|date',
+//             'notes'            => 'nullable|string',
+//             'price'            => 'nullable|numeric',
+//         ]);
+
+//         $appointment->update($data);
+
+//         // إشعار الطرف الآخر مع حماية الأخطاء
+//         try {
+//             $other = $appointment->patient_id === auth()->id()
+//                 ? $appointment->doctor
+//                 : $appointment->patient;
+
+//             if ($other && $other->fcm_token) {
+//                 $this->fcm->sendToUser(
+//                     $other->fcm_token,
+//                     'Appointment edited',
+//                     'Appointment edited number: ' . $appointment->id,
+//                     ['appointment_id' => $appointment->id]
+//                 );
+//             }
+//         } catch (\Exception $e) {
+//             Log::warning('FCM notification failed in update: ' . $e->getMessage(), [
+//                 'appointment_id' => $appointment->id,
+//                 'user_id' => auth()->id(),
+//             ]);
+//         }
+
+//         $filtered = $appointment->only([
+//             'id',
+//             'notes',
+//             'status',
+//             'appointment_date',
+//             'price',
+//             'patient_id',
+//             'doctor_id'
+//         ]);
+
+//         return response()->json([
+//             'message' => 'Appointment updated successfully',
+//             'appointment' => $filtered
+//         ]);
+//     }
+
+//     // إلغاء موعد
+//     public function cancel(Request $request, int $id): JsonResponse
+//     {
+//         $appointment = Appointment::findOrFail($id);
+//         $this->authorize('cancel', $appointment);
+
+//         $appointment->update([
+//             'status'      => Appointment::STATUS_CANCELED,
+//             'canceled_by' => Auth::id(),
+//         ]);
+
+//         // إشعار للطرف الآخر - مع حماية من أخطاء Firebase
+//         try {
+//             $other = $appointment->patient_id === Auth::id()
+//                 ? $appointment->doctor
+//                 : $appointment->patient;
+
+//             if ($other && $other->fcm_token) {
+//                 $this->fcm->sendToUser(
+//                     $other->fcm_token,
+//                     'Appointment canceled',
+//                     'Appointment canceled number: ' . $appointment->id,
+//                     ['appointment_id' => $appointment->id]
+//                 );
+//             }
+//         } catch (\Exception $e) {
+//             Log::warning('FCM notification failed in cancel: ' . $e->getMessage(), [
+//                 'appointment_id' => $appointment->id,
+//                 'user_id' => Auth::id()
+//             ]);
+//         }
+
+//         $filtered = $appointment->only([
+//             'id',
+//             'notes',
+//             'status',
+//             'appointment_date',
+//             'price',
+//             'patient_id',
+//             'doctor_id'
+//         ]);
+
+//         return response()->json([
+//             'message' => 'Appointment updated successfully',
+//             'appointment' => $filtered
+//         ]);
+//     }
+
+//     // جلب التخصصات
+//     public function specializations(): JsonResponse
+//     {
+//         $specs = Doctor::distinct()->pluck('specialization');
+//         return response()->json($specs);
+//     }
+
+//     // جلب الأطباء حسب تخصص
+//     public function doctorsBySpecialization(string $specialization): JsonResponse
+//     {
+//         $doctors = Doctor::where('specialization', $specialization)->get();
+//         return response()->json($doctors);
+//     }
+
+//     // نطّف الميثود القديم
+//     public function store(Request $request): JsonResponse
+//     {
+//         return response()->json(['message' => 'Booking by schedule is disabled.'], 403);
+//     }
+// }
