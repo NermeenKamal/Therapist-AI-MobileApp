@@ -16,28 +16,28 @@ public function sendMessage(Request $request)
 
     $response = Http::withHeaders([
         'Content-Type' => 'application/json',
-        'x-rapidapi-host' => 'cheapest-gpt-4-turbo-gpt-4-vision-chatgpt-openai-ai-api.p.rapidapi.com',
-        'x-rapidapi-key' => env('RAPIDAPI_KEY'), 
-    ])->post('https://cheapest-gpt-4-turbo-gpt-4-vision-chatgpt-openai-ai-api.p.rapidapi.com/v1/chat/completions', [
-        'model' => 'gpt-4o',
-        'messages' => [
-            ['role' => 'user', 'content' => $userMessage]
-        ],
-        'max_tokens' => 100,
-        'temperature' => 0.9
+    ])->post('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' . env('GEMINI_API_KEY'), [
+        'contents' => [
+            [
+                'parts' => [
+                    ['text' => $userMessage]
+                ]
+            ]
+        ]
     ]);
 
     if ($response->failed()) {
         return response()->json([
-            'error' => 'حدث خطأ أثناء الاتصال بـ RapidAPI.',
+            'error' => 'حدث خطأ أثناء الاتصال بـ Gemini API.',
             'details' => $response->json()
         ], 500);
     }
 
     return response()->json([
-        'response' => $response->json()['choices'][0]['message']['content']
+        'response' => $response->json()['candidates'][0]['content']['parts'][0]['text'] ?? 'لا يوجد رد'
     ]);
 }
+
 
 
     public function getMessages(Request $req)
