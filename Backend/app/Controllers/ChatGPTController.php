@@ -4,41 +4,40 @@ namespace App\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
-use OpenAI\Laravel\Facades\OpenAI;
 use Illuminate\Support\Facades\Log;
 
 class ChatGPTController extends Controller
 {
+    public function sendMessage(Request $request)
+    {
+        $userMessage = $request->input('message');
 
-public function sendMessage(Request $request)
-{
-    $userMessage = $request->input('message');
-
-    $response = Http::withHeaders([
-        'Content-Type' => 'application/json',
-    ])->post('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' . env('GEMINI_API_KEY'), [
-        'contents' => [
+        $response = Http::withHeaders([
+            'Content-Type' => 'application/json',
+        ])->post(
+            'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' . env('GEMINI_API_KEY'),
             [
-                'parts' => [
-                    ['text' => $userMessage]
+                'contents' => [
+                    [
+                        'parts' => [
+                            ['text' => $userMessage]
+                        ]
+                    ]
                 ]
             ]
-        ]
-    ]);
+        );
 
-    if ($response->failed()) {
+        if ($response->failed()) {
+            return response()->json([
+                'error' => 'حدث خطأ أثناء الاتصال بـ Gemini API.',
+                'details' => $response->json()
+            ], 500);
+        }
+
         return response()->json([
-            'error' => 'حدث خطأ أثناء الاتصال بـ Gemini API.',
-            'details' => $response->json()
-        ], 500);
+            'response' => $response->json()['candidates'][0]['content']['parts'][0]['text'] ?? 'لا يوجد رد'
+        ]);
     }
-
-    return response()->json([
-        'response' => $response->json()['candidates'][0]['content']['parts'][0]['text'] ?? 'لا يوجد رد'
-    ]);
-}
-
-
 
     public function getMessages(Request $req)
     {
@@ -65,15 +64,31 @@ public function sendMessage(Request $request)
                 $prompt .= strtoupper($msg['role']).": ".$msg['content']."\n";
             }
 
-            $resp = OpenAI::chat()->create([
-                'model'=>'gpt-4o', 
-                'messages'=>[
-                    ['role'=>'system','content'=>'You are a helpful assistant.'],
-                    ['role'=>'user','content'=>$prompt]
-                ],
-            ]);
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/json',
+            ])->post(
+                'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' . env('GEMINI_API_KEY'),
+                [
+                    'contents' => [
+                        [
+                            'parts' => [
+                                ['text' => $prompt]
+                            ]
+                        ]
+                    ]
+                ]
+            );
 
-            $report = $resp['choices'][0]['message']['content'];
+            if ($response->failed()) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'فشل توليد التقرير.',
+                    'details' => $response->json()
+                ], 500);
+            }
+
+            $report = $response->json()['candidates'][0]['content']['parts'][0]['text'] ?? 'لا يوجد تقرير';
+
             Log::info('Generated report', ['report'=>$report]);
 
             return response()->json(['status'=>'success','report'=>$report]);
