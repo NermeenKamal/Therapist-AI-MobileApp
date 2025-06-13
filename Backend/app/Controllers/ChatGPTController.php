@@ -8,12 +8,12 @@ use Illuminate\Support\Facades\Log;
 
 class ChatGPTController extends Controller
 {
-   public function sendMessage(Request $request)
+  public function sendMessage(Request $request)
 {
     $userMessage = $request->input('message');
 
-    // URL بتاع موديل سيرفيس
-    $modelServiceUrl = env('MODEL_SERVICE_URL', 'https://t5-small-chatbot-production.up.railway.app/chat');
+    // عنوان الخدمة (FastAPI Chatbot) — endpoint الصحيح
+    $modelServiceUrl = env('MODEL_SERVICE_URL', 'https://t5-small-chatbot-production.up.railway.app/chat/send-message');
 
     try {
         $response = Http::withHeaders([
@@ -39,6 +39,7 @@ class ChatGPTController extends Controller
         ], 500);
     }
 }
+
 
 
     // public function sendMessage(Request $request)
