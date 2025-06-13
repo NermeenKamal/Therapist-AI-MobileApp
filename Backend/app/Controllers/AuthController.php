@@ -175,60 +175,85 @@ class AuthController extends Controller
     }
 
     public function registerPatient(Request $request): JsonResponse
-    {
-        $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255|min:3',
-            'email' => 'required|string|email|max:255|unique:patients,email|unique:doctors,email',
-            'password' => 'required|string|min:8|confirmed|regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/',
-            'mobile_number' => ['required', 'string', new EgyptianMobileNumber(), 'unique:patients,mobile_number'],
-            'national_id' => ['required', 'string', new EgyptianNationalId(), 'unique:patients,national_id'],
-        ], [
-            'password.regex' => 'Password must contain at least one uppercase letter, one lowercase letter, and one number.',
-            'email.unique' => 'This email is already registered.',
+{
+    $validator = Validator::make($request->all(), [
+        'name' => 'required|string|max:255|min:3',
+        'email' => 'required|string|email|max:255|unique:patients,email|unique:doctors,email',
+        'password' => 'required|string|min:8|confirmed|regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/',
+        'mobile_number' => ['required', 'string', new EgyptianMobileNumber(), 'unique:patients,mobile_number'],
+        'national_id' => ['required', 'string', new EgyptianNationalId(), 'unique:patients,national_id'],
+    ], [
+        'password.regex' => 'Password must contain at least one uppercase letter, one lowercase letter, and one number.',
+        'email.unique' => 'This email is already registered.',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json(['errors' => $validator->errors()], 422);
+    }
+
+    // ✅ التحقق من السن من الرقم القومي
+    try {
+        $nationalId = $request->input('national_id');
+        $birthCentury = substr($nationalId, 0, 1) == '3' ? 2000 : 1900;
+        $birthYear = $birthCentury + intval(substr($nationalId, 1, 2));
+        $birthMonth = intval(substr($nationalId, 3, 2));
+        $birthDay = intval(substr($nationalId, 5, 2));
+
+        $birthDate = \Carbon\Carbon::createFromDate($birthYear, $birthMonth, $birthDay);
+        $age = $birthDate->age;
+
+        if ($age < 16) {
+            return response()->json([
+                'message' => 'You must be at least 16 years old to register as a patient.',
+                'status' => 'rejected_due_to_age'
+            ], 403);
+        }
+    } catch (\Exception $e) {
+        return response()->json([
+            'message' => 'Invalid national ID format.',
+            'detail' => $e->getMessage()
+        ], 422);
+    }
+
+    try {
+        DB::beginTransaction();
+
+        $patient = new Patient();
+        $patient->name = trim($request->input('name'));
+        $patient->email = strtolower(trim($request->input('email')));
+        $patient->password = Hash::make($request->input('password'));
+        $patient->mobile_number = preg_replace('/[^\d]/', '', $request->input('mobile_number'));
+        $patient->national_id = $request->input('national_id');
+        $patient->email_verified = false;
+        $patient->save();
+
+        // إرسال كود التفعيل
+        if (!$this->emailService->sendVerificationCode($patient->email)) {
+            throw new \Exception('Failed to send verification email');
+        }
+
+        DB::commit();
+
+        return response()->json([
+            'message' => 'Patient registered successfully. Please check your email for verification code.',
+            'user' => $patient->makeHidden(['password']),
+            'status' => 'pending_email_verification'
+        ], 201);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Patient registration failed:', [
+            'error' => $e->getMessage(),
+            'email' => $request->email
         ]);
 
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
-
-        try {
-            DB::beginTransaction();
-
-            $patient = new Patient();
-            $patient->name = trim($request->input('name'));
-            $patient->email = strtolower(trim($request->input('email')));
-            $patient->password = Hash::make($request->input('password'));
-            $patient->mobile_number = preg_replace('/[^\d]/', '', $request->input('mobile_number'));
-            $patient->national_id = $request->input('national_id');
-            $patient->email_verified = false;
-            $patient->save();
-
-            // إرسال كود التفعيل
-            if (!$this->emailService->sendVerificationCode($patient->email)) {
-                throw new \Exception('Failed to send verification email');
-            }
-
-            DB::commit();
-
-            return response()->json([
-                'message' => 'Patient registered successfully. Please check your email for verification code.',
-                'user' => $patient->makeHidden(['password']),
-                'status' => 'pending_email_verification'
-            ], 201);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Patient registration failed:', [
-                'error' => $e->getMessage(),
-                'email' => $request->email
-            ]);
-
-            return response()->json([
-                'message' => 'Registration failed. Please try again.',
-                'error' => app()->environment('local') ? $e->getMessage() : null
-            ], 500);
-        }
+        return response()->json([
+            'message' => 'Registration failed. Please try again.',
+            'error' => app()->environment('local') ? $e->getMessage() : null
+        ], 500);
     }
+}
+
 
     public function registerDoctor(Request $request): JsonResponse
     {
