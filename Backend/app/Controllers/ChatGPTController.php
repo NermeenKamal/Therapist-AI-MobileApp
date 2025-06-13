@@ -9,35 +9,61 @@ use Illuminate\Support\Facades\Log;
 class ChatGPTController extends Controller
 {
     public function sendMessage(Request $request)
-    {
-        $userMessage = $request->input('message');
+{
+    $userMessage = $request->input('message');
 
-        $response = Http::withHeaders([
-            'Content-Type' => 'application/json',
-        ])->post(
-            'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' . env('GEMINI_API_KEY'),
-            [
-                'contents' => [
-                    [
-                        'parts' => [
-                            ['text' => $userMessage]
-                        ]
-                    ]
-                ]
-            ]
-        );
+    $response = Http::withHeaders([
+        'Authorization' => 'Bearer ' . env('HUGGINGFACE_API_KEY'),
+        'Content-Type' => 'application/json',
+    ])->post(
+        'https://api-inference.huggingface.co/models/Nermeenkamal888/Therapy-T5-Small-Fine-Tuned-Chatbot',
+        [
+            'inputs' => $userMessage,
+        ]
+    );
 
-        if ($response->failed()) {
-            return response()->json([
-                'error' => 'حدث خطأ أثناء الاتصال بـ Gemini API.',
-                'details' => $response->json()
-            ], 500);
-        }
-
+    if ($response->failed()) {
         return response()->json([
-            'response' => $response->json()['candidates'][0]['content']['parts'][0]['text'] ?? 'لا يوجد رد'
-        ]);
+            'error' => 'حدث خطأ أثناء الاتصال بـ Hugging Face API.',
+            'details' => $response->json()
+        ], 500);
     }
+
+    return response()->json([
+        'response' => $response->json()[0]['generated_text'] ?? 'لا يوجد رد'
+    ]);
+}
+
+    // public function sendMessage(Request $request)
+    // {
+    //     $userMessage = $request->input('message');
+
+    //     $response = Http::withHeaders([
+    //         'Content-Type' => 'application/json',
+    //     ])->post(
+    //         'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' . env('GEMINI_API_KEY'),
+    //         [
+    //             'contents' => [
+    //                 [
+    //                     'parts' => [
+    //                         ['text' => $userMessage]
+    //                     ]
+    //                 ]
+    //             ]
+    //         ]
+    //     );
+
+    //     if ($response->failed()) {
+    //         return response()->json([
+    //             'error' => 'حدث خطأ أثناء الاتصال بـ Gemini API.',
+    //             'details' => $response->json()
+    //         ], 500);
+    //     }
+
+    //     return response()->json([
+    //         'response' => $response->json()['candidates'][0]['content']['parts'][0]['text'] ?? 'لا يوجد رد'
+    //     ]);
+    // }
 
     public function getMessages(Request $req)
     {
