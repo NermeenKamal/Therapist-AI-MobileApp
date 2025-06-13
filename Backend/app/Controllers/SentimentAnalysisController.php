@@ -33,13 +33,15 @@ class SentimentAnalysisController extends Controller
             $rawResult = $bertResponse['raw_result'];
 
             $chatRating = ChatRating::create([
-                'appointment_id'   => $validated['appointment_id'],
-                'patient_id'       => $validated['patient_id'],
-                'rating'           => $rating,
-                'feedback'         => $feedback,
-                'sentiment_score'  => $score,
-                'sentiment_label'  => $label,
-            ]);
+            'appointment_id'   => $validated['appointment_id'],
+            'patient_id'       => $validated['patient_id'],
+            'doctor_id'        => $validated['user_id'],
+            'rating'           => $rating,
+            'feedback'         => $feedback,
+            'sentiment_score'  => $score,
+            'sentiment_label'  => $label,
+        ]);
+
 
             \Log::info('Saved ChatRating to DB', ['id' => $chatRating->id]);
 
