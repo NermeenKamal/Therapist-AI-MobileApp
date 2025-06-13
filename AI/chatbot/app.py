@@ -9,7 +9,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from fastapi.middleware.cors import CORSMiddleware
 
 # إعداد كاش Transformers
-os.environ["TRANSFORMERS_CACHE"] = "/tmp/cache"
+os.environ["HF_HOME"] = "./cache"
 
 # تجاهل التحذيرات
 warnings.filterwarnings("ignore", category=FutureWarning)
