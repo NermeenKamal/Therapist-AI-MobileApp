@@ -16,8 +16,8 @@ client = InferenceClient(
 def root():
     return {"message": "Chatbot is live 🧠"}
 
-@app.post("/chat")
-async def chat(request: Request):
+@app.post("/chat/send-message")
+async def send_message(request: Request):
     data = await request.json()
     message = data.get("message")
 
@@ -32,6 +32,7 @@ async def chat(request: Request):
             "error": "Failed to get response from model",
             "detail": str(e)
         }
+
 
 @app.get("/health")
 def health():
