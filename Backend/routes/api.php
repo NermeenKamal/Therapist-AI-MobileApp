@@ -104,6 +104,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // OCR, Sentiment, Reports
     Route::post('verify-doctor-id', [OcrVerificationController::class, 'verify']);
     Route::post('analyze-chat', [SentimentAnalysisController::class, 'analyze']);
+    Route::get('chat-rating-summary', [SentimentAnalysisController::class, 'summary']);
     Route::post('generate-report', [ReportGenerationController::class, 'generate']);
 
     // AI Chatbot
