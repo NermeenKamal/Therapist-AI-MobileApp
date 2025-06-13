@@ -8,31 +8,38 @@ use Illuminate\Support\Facades\Log;
 
 class ChatGPTController extends Controller
 {
-    public function sendMessage(Request $request)
+   public function sendMessage(Request $request)
 {
     $userMessage = $request->input('message');
 
-    $response = Http::withHeaders([
-        'Authorization' => 'Bearer ' . env('HUGGINGFACE_API_KEY'),
-        'Content-Type' => 'application/json',
-    ])->post(
-        'https://api-inference.huggingface.co/models/Nermeenkamal888/Therapy-T5-Small-Fine-Tuned-Chatbot',
-        [
-            'inputs' => $userMessage,
-        ]
-    );
+    // URL بتاع موديل سيرفيس
+    $modelServiceUrl = env('MODEL_SERVICE_URL', 'https://t5-small-chatbot-production.up.railway.app/chat');
 
-    if ($response->failed()) {
+    try {
+        $response = Http::withHeaders([
+            'Content-Type' => 'application/json',
+        ])->post($modelServiceUrl, [
+            'message' => $userMessage,
+        ]);
+
+        if ($response->failed()) {
+            return response()->json([
+                'error' => 'حدث خطأ أثناء الاتصال بـ Model Service.',
+                'details' => $response->json()
+            ], 500);
+        }
+
         return response()->json([
-            'error' => 'حدث خطأ أثناء الاتصال بـ Hugging Face API.',
-            'details' => $response->json()
+            'response' => $response->json()['response'] ?? 'لا يوجد رد'
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'error' => 'فشل الاتصال بالموديل سيرفيس.',
+            'details' => $e->getMessage()
         ], 500);
     }
-
-    return response()->json([
-        'response' => $response->json()[0]['generated_text'] ?? 'لا يوجد رد'
-    ]);
 }
+
 
     // public function sendMessage(Request $request)
     // {
