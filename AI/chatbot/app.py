@@ -4,8 +4,8 @@ from huggingface_hub import InferenceClient
 
 app = FastAPI()
 
-HF_MODEL_ID = "microsoft/DialoGPT-small"  # أو أي موديل شات من Hugging Face
-HF_TOKEN = os.getenv("HF_TOKEN")  # لازم تحطي التوكن ده في متغيرات البيئة
+HF_MODEL_ID = "Nermeenkamal888/Therapy-T5-Small-Fine-Tuned-Chatbot"  
+HF_TOKEN = os.getenv("HF_TOKEN")  
 
 client = InferenceClient(
     model=HF_MODEL_ID,
