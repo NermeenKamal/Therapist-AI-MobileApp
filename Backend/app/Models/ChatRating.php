@@ -14,7 +14,9 @@ class ChatRating extends Model
         'patient_id',
         'rating',
         'feedback',
-        'doctor_id'
+        'doctor_id',
+        'sentiment_score',
+        'sentiment_label'
     ];
 
     protected $casts = [
