@@ -69,4 +69,31 @@ class SentimentAnalysisController extends Controller
             ], 500);
         }
     }
+
+    public function summary(Request $request)
+{
+    $validated = $request->validate([
+        'doctor_id' => 'required|integer|exists:doctors,id',
+    ]);
+
+    $ratings = ChatRating::where('doctor_id', $validated['doctor_id'])->pluck('rating');
+
+    if ($ratings->isEmpty()) {
+        return response()->json([
+            'status' => 'success',
+            'rating' => null,
+            'message' => 'No ratings yet for this doctor.',
+        ]);
+    }
+
+    $average = round($ratings->average(), 2);
+
+    return response()->json([
+        'status' => 'success',
+        'doctor_id' => $validated['doctor_id'],
+        'average_rating' => $average,
+        'total_messages' => $ratings->count(),
+    ]);
+}
+
 }
