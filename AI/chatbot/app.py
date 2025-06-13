@@ -17,7 +17,7 @@ def root():
     return {"message": "Chatbot is live 🧠"}
 
 @app.post("/chat/send-message")
-async def send_message(request: Request):
+async def chat(request: Request):
     data = await request.json()
     message = data.get("message")
 
@@ -26,12 +26,15 @@ async def send_message(request: Request):
 
     try:
         response = client.text_generation(prompt=message, max_new_tokens=100)
-        return {"response": response}
+        return {
+            "raw_response": response
+        }
     except Exception as e:
         return {
             "error": "Failed to get response from model",
             "detail": str(e)
         }
+
 
 
 @app.get("/health")
