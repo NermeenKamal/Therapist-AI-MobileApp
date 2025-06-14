@@ -22,13 +22,17 @@ async def chat(request: Request):
                 "Authorization": f"Bearer {HF_TOKEN}",
                 "Content-Type": "application/json"
             },
-            json={"inputs": f"User: {message}"}
+            json={"inputs": f"{message}"}
         )
 
-        if response.status_code != 200:
-            return {"error": "Model error", "detail": response.json()}
+        print("Status:", response.status_code)
+        print("Response Text:", response.text)
 
-        generated = response.json()[0]["generated_text"]
+        if response.status_code != 200:
+            return {"error": "Model error", "detail": response.text}
+
+        output = response.json()
+        generated = output[0]["generated_text"] if output else "No output"
         return {"response": generated}
 
     except Exception as e:
