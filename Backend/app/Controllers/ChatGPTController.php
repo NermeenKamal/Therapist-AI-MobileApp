@@ -8,34 +8,27 @@ use Illuminate\Support\Facades\Log;
 
 class ChatGPTController extends Controller
 {
-   public function sendMessage(Request $request)
+
+public function sendMessage(Request $request)
 {
     $userMessage = $request->input('message');
 
-    $modelServiceUrl = 'https://nermeenkamal888-therapy.hf.space/api/predict/';
+    $modelServiceUrl = 'https://huggingface.co/spaces/Nermeenkamal888/therapy/api/predict';
 
-    try {
-        $response = Http::post($modelServiceUrl, [
-            'data' => [$userMessage],
-        ]);
+    $response = Http::post($modelServiceUrl, [
+        'message' => $userMessage,
+    ]);
 
-        if ($response->failed()) {
-            return response()->json([
-                'error' => 'حدث خطأ أثناء الاتصال بـ Hugging Face Space.',
-                'details' => $response->json()
-            ], 500);
-        }
-
-        // الرد بيكون في data[0]
+    if ($response->failed()) {
         return response()->json([
-            'response' => $response->json()['data'][0] ?? 'لا يوجد رد'
-        ]);
-    } catch (\Exception $e) {
-        return response()->json([
-            'error' => 'فشل الاتصال بـ Hugging Face Space.',
-            'details' => $e->getMessage()
+            'error' => 'خطأ في الاتصال بالموديل',
+            'details' => $response->json(),
         ], 500);
     }
+
+    return response()->json([
+        'response' => $response->json() ?? 'لا يوجد رد',
+    ]);
 }
 
 
