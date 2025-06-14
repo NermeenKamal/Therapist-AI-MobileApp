@@ -47,7 +47,7 @@ class ChatGPTController extends Controller
     }
 }
 
-    private function sendToGemini($message, &$debugLog)
+    public function sendToGemini($message, &$debugLog)
     {
         try {
             $debugLog[] = "Sending to Gemini...";
