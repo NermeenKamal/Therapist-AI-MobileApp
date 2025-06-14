@@ -1,11 +1,17 @@
 from fastapi import FastAPI, Request
-import os
-import requests
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+import torch
 
 app = FastAPI()
 
-HF_MODEL_ID = "Nermeenkamal888/Therapy-T5-Small-Fine-Tuned-Chatbot"
-HF_TOKEN = os.getenv("HF_TOKEN")
+# تحميل الموديل والتوكنيزر مرة واحدة عند تشغيل السيرفر
+model_id = "Nermeenkamal888/Therapy-T5-Small-Fine-Tuned-Chatbot"
+tokenizer = AutoTokenizer.from_pretrained(model_id)
+model = AutoModelForSeq2SeqLM.from_pretrained(model_id)
+
+@app.get("/")
+def root():
+    return {"message": "Chatbot is live 🧠"}
 
 @app.post("/chat/send-message")
 async def chat(request: Request):
@@ -16,27 +22,19 @@ async def chat(request: Request):
         return {"error": "Missing 'message' in request"}
 
     try:
-        response = requests.post(
-            f"https://api-inference.huggingface.co/models/{HF_MODEL_ID}",
-            headers={
-                "Authorization": f"Bearer {HF_TOKEN}",
-                "Content-Type": "application/json"
-            },
-            json={"inputs": f"{message}"}
-        )
+        # الترميز
+        inputs = tokenizer.encode(message, return_tensors="pt")
 
-        print("Status:", response.status_code)
-        print("Response Text:", response.text)
+        # التوليد
+        outputs = model.generate(inputs, max_new_tokens=100)
 
-        if response.status_code != 200:
-            return {"error": "Model error", "detail": response.text}
+        # فك الترميز
+        decoded = tokenizer.decode(outputs[0], skip_special_tokens=True)
 
-        output = response.json()
-        generated = output[0]["generated_text"] if output else "No output"
-        return {"response": generated}
-
+        return {"response": decoded}
     except Exception as e:
-        return {
-            "error": "Failed to contact HuggingFace model",
-            "detail": str(e)
-        }
+        return {"error": "Model error", "detail": str(e)}
+
+@app.get("/health")
+def health():
+    return {"status": "ok", "model": model_id}
