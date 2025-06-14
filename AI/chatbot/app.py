@@ -4,7 +4,7 @@ from huggingface_hub import InferenceClient
 
 app = FastAPI()
 
-HF_MODEL_ID = "Nermeenkamal888/Therapy-T5-Small-Fine-Tuned-Chatbot"  
+HF_MODEL_ID = "Gurawa/t5-small-therapist"  
 HF_TOKEN = os.getenv("HF_TOKEN")  
 
 client = InferenceClient(
