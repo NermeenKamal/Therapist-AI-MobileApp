@@ -9,43 +9,35 @@ use Illuminate\Support\Facades\Log;
 class ChatGPTController extends Controller
 {
     public function sendMessage(Request $request)
-    {
-        $userMessage = $request->input('message');
+{
+    $userMessage = $request->input('message');
+    Log::info('Received message:', ['message' => $userMessage]);
 
-        // الرابط المباشر لواجهة API الخاصة بـ Hugging Face Space
-        $modelServiceUrl = 'https://nermeenkamal888-therapy.hf.space/run/predict';
+    $modelServiceUrl = 'https://nermeenkamal888-therapy.hf.space/run/predict';
 
-        try {
-            // ارسال طلب POST مع تنسيق بيانات الـ payload حسب متطلبات Gradio API
-            $response = Http::post($modelServiceUrl, [
-                'data' => [$userMessage]  // data يجب أن تكون مصفوفة تحتوي الرسالة
-            ]);
+    try {
+        $response = Http::post($modelServiceUrl, [
+            'data' => [$userMessage],
+        ]);
 
-            if ($response->failed()) {
-                return response()->json([
-                    'error' => 'حدث خطأ أثناء الاتصال بـ Hugging Face Space.',
-                    'details' => $response->json()
-                ], 500);
-            }
+        Log::info('Response from model service:', ['response' => $response->body()]);
 
-            // التحقق من وجود الرد داخل المفتاح data
-            $responseData = $response->json();
-
-            if (isset($responseData['data'][0])) {
-                return response()->json([
-                    'response' => $responseData['data'][0]
-                ]);
-            } else {
-                return response()->json([
-                    'response' => 'لا يوجد رد من الموديل.'
-                ]);
-            }
-        } catch (\Exception $e) {
+        if ($response->failed()) {
             return response()->json([
-                'error' => 'فشل الاتصال بـ Hugging Face Space.',
-                'details' => $e->getMessage()
+                'error' => 'حدث خطأ أثناء الاتصال بـ Hugging Face Space.',
+                'details' => $response->json()
             ], 500);
         }
+
+        return response()->json([
+            'response' => $response->json()['data'][0] ?? 'لا يوجد رد'
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Exception caught:', ['error' => $e->getMessage()]);
+        return response()->json([
+            'error' => 'فشل الاتصال بـ Hugging Face Space.',
+            'details' => $e->getMessage()
+        ], 500);
     }
 }
 
