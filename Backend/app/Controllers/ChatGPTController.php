@@ -8,19 +8,16 @@ use Illuminate\Support\Facades\Log;
 
 class ChatGPTController extends Controller
 {
-    public function sendMessage(Request $request)
+   public function sendMessage(Request $request)
 {
     $userMessage = $request->input('message');
-    Log::info('Received message:', ['message' => $userMessage]);
 
-    $modelServiceUrl = 'https://nermeenkamal888-therapy.hf.space/run/predict';
+    $modelServiceUrl = 'https://nermeenkamal888-therapy.hf.space/api/predict/';
 
     try {
         $response = Http::post($modelServiceUrl, [
             'data' => [$userMessage],
         ]);
-
-        Log::info('Response from model service:', ['response' => $response->body()]);
 
         if ($response->failed()) {
             return response()->json([
@@ -29,17 +26,18 @@ class ChatGPTController extends Controller
             ], 500);
         }
 
+        // الرد بيكون في data[0]
         return response()->json([
             'response' => $response->json()['data'][0] ?? 'لا يوجد رد'
         ]);
     } catch (\Exception $e) {
-        Log::error('Exception caught:', ['error' => $e->getMessage()]);
         return response()->json([
             'error' => 'فشل الاتصال بـ Hugging Face Space.',
             'details' => $e->getMessage()
         ], 500);
     }
 }
+
 
 
 
