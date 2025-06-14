@@ -25,7 +25,7 @@ async def chat(request: Request):
         return {"error": "Missing 'message' in request"}
 
     try:
-        response = client.text_generation(prompt=message, max_new_tokens=100)
+        response = client.text2text(prompt=message, max_new_tokens=100)
         return {
             "raw_response": response
         }
