@@ -8,33 +8,30 @@ use Illuminate\Support\Facades\Log;
 
 class ChatGPTController extends Controller
 {
-  public function sendMessage(Request $request)
+ public function sendMessage(Request $request)
 {
     $userMessage = $request->input('message');
 
-    // عنوان الخدمة (FastAPI Chatbot) — endpoint الصحيح
-    $modelServiceUrl = env('MODEL_SERVICE_URL', 'https://t5-small-chatbot-production.up.railway.app/chat/send-message');
+    $modelServiceUrl = env('MODEL_SERVICE_URL', 'https://nermeenkamal888-therapy.hf.space/run/predict');
 
     try {
-        $response = Http::withHeaders([
-            'Content-Type' => 'application/json',
-        ])->post($modelServiceUrl, [
-            'message' => $userMessage,
+        $response = Http::post($modelServiceUrl, [
+            'data' => [$userMessage],
         ]);
 
         if ($response->failed()) {
             return response()->json([
-                'error' => 'حدث خطأ أثناء الاتصال بـ Model Service.',
+                'error' => 'حدث خطأ أثناء الاتصال بـ Hugging Face Space.',
                 'details' => $response->json()
             ], 500);
         }
 
         return response()->json([
-            'response' => $response->json()['response'] ?? 'لا يوجد رد'
+            'response' => $response->json()['data'][0] ?? 'لا يوجد رد'
         ]);
     } catch (\Exception $e) {
         return response()->json([
-            'error' => 'فشل الاتصال بالموديل سيرفيس.',
+            'error' => 'فشل الاتصال بـ Hugging Face Space.',
             'details' => $e->getMessage()
         ], 500);
     }
