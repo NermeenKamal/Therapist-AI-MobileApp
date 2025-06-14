@@ -62,8 +62,11 @@ class ChatGPTController extends Controller
             // ننتظر قليلاً ثم نطلب النتيجة
             sleep(2);
 
-            $getResponse = Http::withOptions(['stream' => true])
-                ->get("https://nermeenkamal888-therapy.hf.space/gradio_api/call/predict/{$eventId}");
+            // طلب GET مع مهلة 60 ثانية
+            $getResponse = Http::withOptions([
+                'stream' => true,
+                'timeout' => 60
+            ])->get("https://nermeenkamal888-therapy.hf.space/gradio_api/call/predict/{$eventId}");
 
             if ($getResponse->failed()) {
                 Log::error('Failed GET result from Gradio model', ['body' => $getResponse->body()]);
