@@ -65,7 +65,7 @@ class ChatGPTController extends Controller
             // طلب GET مع مهلة 60 ثانية
             $getResponse = Http::withOptions([
                 'stream' => true,
-                'timeout' => 60
+                'timeout' => 160
             ])->get("https://nermeenkamal888-therapy.hf.space/gradio_api/call/predict/{$eventId}");
 
             if ($getResponse->failed()) {
