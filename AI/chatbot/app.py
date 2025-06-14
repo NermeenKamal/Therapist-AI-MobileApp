@@ -1,20 +1,11 @@
 from fastapi import FastAPI, Request
 import os
-from huggingface_hub import InferenceClient
+import requests
 
 app = FastAPI()
 
-HF_MODEL_ID = "Nermeenkamal888/Therapy-T5-Small-Fine-Tuned-Chatbot"  
-HF_TOKEN = os.getenv("HF_TOKEN")  
-
-client = InferenceClient(
-    model=HF_MODEL_ID,
-    token=HF_TOKEN,
-)
-
-@app.get("/")
-def root():
-    return {"message": "Chatbot is live 🧠"}
+HF_MODEL_ID = "Nermeenkamal888/Therapy-T5-Small-Fine-Tuned-Chatbot"
+HF_TOKEN = os.getenv("HF_TOKEN")
 
 @app.post("/chat/send-message")
 async def chat(request: Request):
@@ -25,22 +16,23 @@ async def chat(request: Request):
         return {"error": "Missing 'message' in request"}
 
     try:
-        response = client.text2text(prompt=message, max_new_tokens=100)
-        return {
-            "raw_response": response
-        }
+        response = requests.post(
+            f"https://api-inference.huggingface.co/models/{HF_MODEL_ID}",
+            headers={
+                "Authorization": f"Bearer {HF_TOKEN}",
+                "Content-Type": "application/json"
+            },
+            json={"inputs": f"User: {message}"}
+        )
+
+        if response.status_code != 200:
+            return {"error": "Model error", "detail": response.json()}
+
+        generated = response.json()[0]["generated_text"]
+        return {"response": generated}
+
     except Exception as e:
         return {
-            "error": "Failed to get response from model",
+            "error": "Failed to contact HuggingFace model",
             "detail": str(e)
         }
-
-
-
-@app.get("/health")
-def health():
-    return {
-        "status": "ok",
-        "model": HF_MODEL_ID,
-        "token_set": bool(HF_TOKEN)
-    }
