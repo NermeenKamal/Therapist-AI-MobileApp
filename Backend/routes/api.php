@@ -19,8 +19,8 @@ use App\Controllers\FCMController;
 use App\Controllers\PatientController;
 use App\Controllers\GradioChatController;
 
-Route::post('/chat/send', [GradioChatController::class, 'send']);
-Route::get('/chat/response/{id}', [GradioChatController::class, 'getResponse']);
+Route::post('chat/send', [GradioChatController::class, 'send']);
+Route::get('chat/response/{id}', [GradioChatController::class, 'getResponse']);
 
 // إرسال رسالة إلى موديل Gradio على HuggingFace
 Route::post('chat/send/gradio', [ChatGPTController::class, 'sendToGradio']);
