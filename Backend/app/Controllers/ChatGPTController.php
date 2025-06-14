@@ -15,7 +15,7 @@ public function sendMessage(Request $request)
 
     $modelServiceUrl = 'https://huggingface.co/spaces/Nermeenkamal888/therapy/api/predict';
 
-    $response = Http::post($modelServiceUrl, [
+    $response = Http::timeout(120)->post($modelServiceUrl, [
         'message' => $userMessage,
     ]);
 
