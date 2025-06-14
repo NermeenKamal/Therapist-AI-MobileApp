@@ -1,3 +1,4 @@
-gradio
+fastapi
+uvicorn[standard]
 transformers
 torch
