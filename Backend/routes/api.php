@@ -18,9 +18,17 @@ use App\Controllers\ArticleController;
 use App\Controllers\FCMController;
 use App\Controllers\PatientController;
 
-Route::post('chat/send-message', [ChatGPTController::class,'sendMessage']);
-Route::post('chat/get-messages', [ChatGPTController::class,'getMessages']);
-Route::post('chat/generate-report', [ChatGPTController::class,'generateReport']);
+// إرسال رسالة إلى موديل Gradio على HuggingFace
+Route::post('/chat/send/gradio', [ChatGPTController::class, 'sendToGradio']);
+
+// إرسال رسالة إلى موديل Gemini
+Route::post('/chat/send/gemini', [ChatGPTController::class, 'sendToGemini']);
+
+// استرجاع المحادثة الثابتة
+Route::get('/chat/messages', [ChatGPTController::class, 'getMessages']);
+
+// توليد تقرير من المحادثة
+Route::post('/chat/report', [ChatGPTController::class, 'generateReport']);
 
 // Health check endpoint
 Route::get('/health', function () {
