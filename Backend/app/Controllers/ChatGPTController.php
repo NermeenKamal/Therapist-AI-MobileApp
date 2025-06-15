@@ -102,48 +102,58 @@ class ChatGPTController extends Controller
         }
     }
 
-    // دالة خاصة تعالج طلب Gemini فعليًا
-    private function handleSendToGemini(string $message)
-    {
-        try {
-            Log::info('Sending message to Gemini model', ['message' => $message]);
+   // دالة خاصة تعالج طلب Gemini فعليًا
+private function handleSendToGemini(string $message)
+{
+    try {
+        Log::info('Sending message to Gemini model', ['message' => $message]);
 
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json',
-            ])->post(
-                'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' . env('GEMINI_API_KEY'),
-                [
-                    'contents' => [
-                        [
-                            'parts' => [
-                                ['text' => $message]
-                            ]
+        // إعداد prompt خاص لتحديد دور Gemini كمعالج نفسي فقط
+        $prompt = <<<EOT
+You are a compassionate and professional mental health therapist. Your role is to support users by listening to their emotional struggles, helping them understand their feelings, and providing coping techniques and psychological guidance.
+
+Do not provide any form of medical diagnosis, medical treatments, or medications. Avoid discussing or recommending any drugs or medical therapies. Your advice should strictly focus on psychological support, emotional well-being, cognitive techniques, and lifestyle suggestions for mental wellness only.
+
+User message: {$message}
+EOT;
+
+        // إرسال الطلب إلى Gemini API
+        $response = Http::withHeaders([
+            'Content-Type' => 'application/json',
+        ])->post(
+            'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' . env('GEMINI_API_KEY'),
+            [
+                'contents' => [
+                    [
+                        'parts' => [
+                            ['text' => $prompt]
                         ]
                     ]
                 ]
-            );
+            ]
+        );
 
-            if ($response->failed()) {
-                Log::error('Failed to connect to Gemini API', ['response' => $response->json()]);
-                return response()->json([
-                    'error' => 'فشل في الاتصال بـ Gemini API.',
-                    'details' => $response->json()
-                ], 500);
-            }
-
-            $text = $response->json()['candidates'][0]['content']['parts'][0]['text'] ?? 'لا يوجد رد';
-
-            Log::info('Received response from Gemini', ['response' => $text]);
-
+        if ($response->failed()) {
+            Log::error('Failed to connect to Gemini API', ['response' => $response->json()]);
             return response()->json([
-                'response' => $text
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Exception connecting to Gemini', ['exception' => $e->getMessage()]);
-            return response()->json([
-                'error' => 'Exception في الاتصال بـ Gemini.',
-                'details' => $e->getMessage()
+                'error' => 'فشل في الاتصال بـ Gemini API.',
+                'details' => $response->json()
             ], 500);
         }
+
+        $text = $response->json()['candidates'][0]['content']['parts'][0]['text'] ?? 'لا يوجد رد';
+
+        Log::info('Received response from Gemini', ['response' => $text]);
+
+        return response()->json([
+            'response' => $text
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Exception connecting to Gemini', ['exception' => $e->getMessage()]);
+        return response()->json([
+            'error' => 'Exception في الاتصال بـ Gemini.',
+            'details' => $e->getMessage()
+        ], 500);
     }
+}
 }
